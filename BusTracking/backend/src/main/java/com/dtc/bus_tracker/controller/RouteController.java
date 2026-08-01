@@ -8,7 +8,6 @@ import com.dtc.bus_tracker.entity.Stop;
 import com.dtc.bus_tracker.exception.ResourceNotFoundException;
 import com.dtc.bus_tracker.mapper.RouteMapper;
 import com.dtc.bus_tracker.repository.RouteRepository;
-import com.dtc.bus_tracker.repository.StopRepository;
 import com.dtc.bus_tracker.service.RouteDetailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,14 +22,13 @@ import java.util.stream.Collectors;
 public class RouteController {
 
     private final RouteRepository routeRepository;
-    private final StopRepository stopRepository;
     private final RouteDetailService routeDetailService;
     private final RouteMapper routeMapper;
 
     // GET /api/routes - List all routes
     @GetMapping
     public ResponseEntity<List<RouteDto>> getAllRoutes() {
-        List<Route> routes = routeRepository.findAll();
+        List<Route> routes = routeRepository.findAllWithStops();
         List<RouteDto> dtos = routes.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
@@ -60,7 +58,7 @@ public class RouteController {
     public ResponseEntity<List<RouteDto>> searchRoutes(@RequestParam String query,
                                                        @RequestParam(defaultValue = "10") int limit) {
         // Simple in-memory search; for production use @Query with LIKE
-        List<Route> routes = routeRepository.findAll().stream()
+        List<Route> routes = routeRepository.findAllWithStops().stream()
                 .filter(r -> r.getName() != null && r.getName().toLowerCase().contains(query.toLowerCase())
                         || r.getRouteCode() != null && r.getRouteCode().toLowerCase().contains(query.toLowerCase()))
                 .limit(limit)
@@ -68,13 +66,14 @@ public class RouteController {
         return ResponseEntity.ok(routes.stream().map(this::toDTO).collect(Collectors.toList()));
     }
 
-    // DTO conversion - MapStruct handles the flat fields, stops come from the join table.
+    // DTO conversion - MapStruct handles the flat fields; stops must already be
+    // loaded on the route (e.g. via findAllWithStops) to avoid a query per route.
     private RouteDto toDTO(Route route) {
         RouteDto dto = routeMapper.toDto(route);
 
-        List<Stop> stops = stopRepository.findByRoutes_Id(route.getId());
-        dto.setStopIds(stops.stream().map(stop -> stop.getId()).collect(Collectors.toList()));
-        dto.setStopNames(stops.stream().map(stop -> stop.getName()).collect(Collectors.toList()));
+        List<Stop> stops = route.getStops();
+        dto.setStopIds(stops.stream().map(Stop::getId).collect(Collectors.toList()));
+        dto.setStopNames(stops.stream().map(Stop::getName).collect(Collectors.toList()));
 
         return dto;
     }

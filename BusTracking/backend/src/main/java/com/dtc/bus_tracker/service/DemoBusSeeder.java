@@ -22,7 +22,7 @@ import java.util.Random;
  * something to poll.
  */
 @Service
-@Profile("fake-buses")
+@Profile("demo")
 public class DemoBusSeeder {
 
     private static final int BUS_COUNT = 15;
