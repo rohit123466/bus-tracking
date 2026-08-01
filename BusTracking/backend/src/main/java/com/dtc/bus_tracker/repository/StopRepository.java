@@ -10,7 +10,4 @@ import java.util.Optional;
 public interface StopRepository extends JpaRepository<Stop, Long> {
 
     Optional<Stop> findByStopId(String stopId);
-
-    // ADD THIS METHOD
-    List<Stop> findByRoutes_Id(Long routeId);
 }
