@@ -25,7 +25,9 @@ export default function BusMap({ userLocation, buses, selectedRoute, onSelectSto
   // legitimately appear once per stop it's approaching. Collapse to one
   // marker per vehicle (closest match wins, since `buses` arrives pre-sorted
   // by distanceToUser) so React doesn't choke on duplicate keys.
-  const uniqueBuses = Array.from(new Map(buses.map((b) => [b.vehicleId, b])).values());
+  const uniqueBuses = Array.from(new Map(buses.map((b) => [b.vehicleId, b])).values()).filter(
+    (b) => Number.isFinite(b.busLatitude) && Number.isFinite(b.busLongitude)
+  );
 
   return (
     <MapContainer center={DELHI_CENTER} zoom={13} zoomControl={false} style={{ height: '100%', width: '100%' }}>

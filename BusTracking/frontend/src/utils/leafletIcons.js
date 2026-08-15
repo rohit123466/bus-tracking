@@ -26,11 +26,22 @@ export const stopIcon = L.divIcon({
   iconAnchor: [6, 6],
 });
 
+// Bus positions stream in continuously (websocket-pushed), but a given
+// vehicle's routeCode is stable across updates - cache by routeCode so we
+// don't reallocate a divIcon on every position tick for every bus.
+const busIconCache = new Map();
+
 export function busIcon(routeCode) {
-  return L.divIcon({
-    className: 'bus-marker',
-    html: `<div class="bus-chip">${routeCode ?? '?'}</div>`,
-    iconSize: [32, 20],
-    iconAnchor: [16, 10],
-  });
+  const key = routeCode ?? '?';
+  let icon = busIconCache.get(key);
+  if (!icon) {
+    icon = L.divIcon({
+      className: 'bus-marker',
+      html: `<div class="bus-chip">${key}</div>`,
+      iconSize: [32, 20],
+      iconAnchor: [16, 10],
+    });
+    busIconCache.set(key, icon);
+  }
+  return icon;
 }
