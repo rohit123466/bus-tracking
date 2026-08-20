@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import NavBar from './components/NavBar';
+import WeatherAlertBanner from './components/WeatherAlertBanner';
 import HomePage from './pages/HomePage';
 import BusSearchPage from './pages/BusSearchPage';
 import RouteDetailPage from './pages/RouteDetailPage';
@@ -15,6 +16,7 @@ function App() {
     <BrowserRouter>
       <div className="app-shell">
         <NavBar />
+        <WeatherAlertBanner />
         <div className="page-outlet">
           <Routes>
             <Route path="/" element={<HomePage />} />

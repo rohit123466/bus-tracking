@@ -97,4 +97,6 @@ export const adminLogin = (username, password) =>
 
 export const getAdminStats = () => client.get('/admin/stats').then((res) => res.data);
 
+export const getWeatherAlert = () => client.get('/weather/alert').then((res) => res.data);
+
 export default client;
