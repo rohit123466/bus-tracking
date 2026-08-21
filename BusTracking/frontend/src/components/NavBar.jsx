@@ -3,6 +3,7 @@ import useVoiceAnnouncements from '../hooks/useVoiceAnnouncements';
 
 const LINKS = [
   { to: '/', label: '🗺️ Live Map', end: true },
+  { to: '/accessibility', label: '♿ Accessibility' },
   { to: '/search', label: '🔍 Search' },
   { to: '/route', label: '🚌 Route' },
   { to: '/stops', label: '📍 Stops' },

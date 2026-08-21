@@ -38,8 +38,12 @@ public class BusSearchService {
                 .speedKmh(event.getSpeedKmh())
                 .bearing(event.getBearing())
                 .lastUpdatedEpochSeconds(event.getTimestamp())
+<<<<<<< HEAD
                 .wheelchairAccessible(routeDetail != null ? routeDetail.getWheelchairAccessible() : null)
                 .wheelchairSpaces(routeDetail != null ? routeDetail.getWheelchairSpaces() : null)
+=======
+                .wheelchairSpaceAvailable(event.getWheelchairSpaceAvailable())
+>>>>>>> 427d9c8f074a1a43e801c6162624d66cf4cd129b
                 .route(routeDetail)
                 .build();
     }

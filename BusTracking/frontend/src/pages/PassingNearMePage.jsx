@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getBusesPassingNear } from '../api/client';
+import WheelchairBadge from '../components/WheelchairBadge';
 
 export default function PassingNearMePage() {
   const [userLocation, setUserLocation] = useState(null);
@@ -31,7 +32,7 @@ export default function PassingNearMePage() {
   }, [userLocation]);
 
   return (
-    <div className="page-panel">
+    <div className="page-panel page-panel-wide">
       <h2>Which Bus Will Pass Near Me</h2>
       {error && <div className="banner banner-error" style={{ position: 'static' }}>{error}</div>}
 
@@ -55,6 +56,7 @@ export default function PassingNearMePage() {
         <thead>
           <tr>
             <th>Route</th>
+            <th>Wheelchair Status</th>
             <th>Destination</th>
             <th>Near stop</th>
             <th>Distance</th>
@@ -75,6 +77,7 @@ export default function PassingNearMePage() {
               }
             >
               <td>
+<<<<<<< HEAD
                 {b.routeCode} {b.routeName ? `— ${b.routeName}` : ''}
                 {b.wheelchairAccessible && (
                   <span
@@ -86,6 +89,12 @@ export default function PassingNearMePage() {
                     ♿
                   </span>
                 )}
+=======
+                <strong>{b.routeCode}</strong> {b.routeName ? `— ${b.routeName}` : ''}
+              </td>
+              <td>
+                <WheelchairBadge status={b.wheelchairSpaceAvailable} showLabel={true} size="sm" />
+>>>>>>> 427d9c8f074a1a43e801c6162624d66cf4cd129b
               </td>
               <td>{b.destination || '—'}</td>
               <td>{b.stopName}</td>

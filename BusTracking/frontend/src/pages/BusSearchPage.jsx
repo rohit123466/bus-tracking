@@ -1,16 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getBusByVehicleId } from '../api/client';
 import StopProgressList from '../components/StopProgressList';
+<<<<<<< HEAD
 import AccessibilityInfo from '../components/AccessibilityInfo';
+=======
+import WheelchairBadge from '../components/WheelchairBadge';
+>>>>>>> 427d9c8f074a1a43e801c6162624d66cf4cd129b
 
 export default function BusSearchPage() {
-  const [vehicleId, setVehicleId] = useState('');
+  const [searchParams] = useSearchParams();
+  const [vehicleId, setVehicleId] = useState(searchParams.get('vehicle') || '');
   const [tracked, setTracked] = useState(null);
   const [bus, setBus] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [wheelchairOnly, setWheelchairOnly] = useState(false);
   const pollRef = useRef(null);
+
+  useEffect(() => {
+    const v = searchParams.get('vehicle');
+    if (v) {
+      setVehicleId(v);
+      search(v);
+    }
+  }, [searchParams]);
 
   const search = (id) => {
     if (!id.trim()) return;
@@ -75,6 +89,7 @@ export default function BusSearchPage() {
 
       {bus && (!wheelchairOnly || bus.wheelchairAccessible) && (
         <div className="card" style={{ marginTop: 16 }}>
+<<<<<<< HEAD
           <h3>
             {bus.vehicleId} — Route {bus.routeCode}
             {bus.routeName ? ` (${bus.routeName})` : ''}
@@ -85,6 +100,15 @@ export default function BusSearchPage() {
             )}
           </h3>
           <AccessibilityInfo accessible={bus.wheelchairAccessible} spaces={bus.wheelchairSpaces} />
+=======
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <h3 style={{ margin: 0 }}>
+              {bus.vehicleId} — Route {bus.routeCode}
+              {bus.routeName ? ` (${bus.routeName})` : ''}
+            </h3>
+            <WheelchairBadge status={bus.wheelchairSpaceAvailable} showLabel={true} size="md" />
+          </div>
+>>>>>>> 427d9c8f074a1a43e801c6162624d66cf4cd129b
           <div className="kv-grid">
             <div>Speed</div>
             <div>{bus.speedKmh != null ? `${bus.speedKmh.toFixed(1)} km/h` : 'Unknown'}</div>

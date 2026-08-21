@@ -29,4 +29,7 @@ public class Bus {
 
     @Enumerated(EnumType.STRING)
     private BusStatus status;
+
+    @Column(name = "wheelchair_accessible")
+    private Boolean wheelchairAccessible;
 }

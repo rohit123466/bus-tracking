@@ -547,6 +547,7 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
+<<<<<<< HEAD
 @media (prefers-color-scheme: dark) {
   .banner-error {
     background: #3a1a17;
@@ -566,3 +567,6 @@
     color: #8be6ac;
   }
 }
+=======
+
+>>>>>>> 427d9c8f074a1a43e801c6162624d66cf4cd129b

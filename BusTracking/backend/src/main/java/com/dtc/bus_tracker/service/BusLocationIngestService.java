@@ -79,6 +79,12 @@ public class BusLocationIngestService {
                 .orElseGet(() -> Bus.builder().vehicleId(event.getVehicleId()).build());
 
         bus.setStatus(BusStatus.ACTIVE);
+        if (event.getWheelchairSpaceAvailable() != null) {
+            bus.setWheelchairAccessible(event.getWheelchairSpaceAvailable());
+        } else if (bus.getWheelchairAccessible() != null) {
+            event.setWheelchairSpaceAvailable(bus.getWheelchairAccessible());
+        }
+
         if (event.getRouteId() != null) {
             Route route = routeRepository.findByRouteCode(event.getRouteId()).orElse(null);
             if (route != null) {
