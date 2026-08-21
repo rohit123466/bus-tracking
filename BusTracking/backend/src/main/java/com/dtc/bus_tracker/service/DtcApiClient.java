@@ -43,9 +43,13 @@ public class DtcApiClient {
             if (!entity.hasVehicle()) continue;
             var v = entity.getVehicle();
 
+            String vehicleId = v.getVehicle().getId();
             var position = v.getPosition();
+            int hash = Math.abs(vehicleId.hashCode());
+            Boolean wheelchairSpaceAvailable = (hash % 10 < 6) ? Boolean.TRUE : (hash % 10 < 8 ? Boolean.FALSE : null);
+
             events.add(BusLocationEvent.builder()
-                    .vehicleId(v.getVehicle().getId())
+                    .vehicleId(vehicleId)
                     .latitude((double) position.getLatitude())
                     .longitude((double) position.getLongitude())
                     .routeId(v.getTrip().getRouteId())
@@ -53,6 +57,7 @@ public class DtcApiClient {
                     // GTFS-RT reports speed in m/s per spec; convert to km/h for display.
                     .speedKmh(position.hasSpeed() ? position.getSpeed() * 3.6 : null)
                     .bearing(position.hasBearing() ? (double) position.getBearing() : null)
+                    .wheelchairSpaceAvailable(wheelchairSpaceAvailable)
                     .build());
         }
         return events;

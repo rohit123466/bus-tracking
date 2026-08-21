@@ -465,10 +465,4 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
-@media (prefers-color-scheme: dark) {
-  .banner-error {
-    background: #3a1a17;
-    color: #f5a397;
-    border-color: #6b2c24;
-  }
-}
+

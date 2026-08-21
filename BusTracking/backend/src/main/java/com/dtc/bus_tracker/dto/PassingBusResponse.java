@@ -13,4 +13,5 @@ public class PassingBusResponse {
     private String destination;
     private Double distanceToStopMeters;
     private Integer etaMinutes;
+    private Boolean wheelchairSpaceAvailable;
 }

@@ -1,0 +1,679 @@
+.accessibility-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hero Header */
+.access-hero {
+  background: linear-gradient(135deg, rgba(170, 59, 255, 0.12) 0%, rgba(34, 197, 94, 0.12) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.access-hero__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  background: var(--accent-bg);
+  padding: 4px 10px;
+  border-radius: 20px;
+  margin-bottom: 8px;
+}
+
+.access-hero__icon {
+  font-size: 14px;
+}
+
+.access-hero__title {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-h);
+  line-height: 1.2;
+}
+
+.access-hero__subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+  max-width: 580px;
+}
+
+.access-hero__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.access-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.access-btn--primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(170, 59, 255, 0.35);
+}
+
+.access-btn--primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(170, 59, 255, 0.45);
+}
+
+.access-btn--primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.access-btn--secondary {
+  background: var(--code-bg);
+  color: var(--text-h);
+  border: 1px solid var(--border);
+}
+
+.access-btn--secondary:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.access-spinner {
+  display: inline-block;
+  animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.access-hero__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.access-hero__time {
+  opacity: 0.85;
+}
+
+.access-alert {
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.access-alert--info {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #2563eb;
+}
+
+/* Stats Cards Grid */
+.access-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.access-stat-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+
+.access-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.access-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.access-stat-card.is-active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.access-stat-card--available::before {
+  background: #22C55E;
+}
+.access-stat-card--unavailable::before {
+  background: #EF4444;
+}
+.access-stat-card--unknown::before {
+  background: #9CA3AF;
+}
+.access-stat-card--total::before {
+  background: var(--accent);
+}
+
+.access-stat-card__icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.access-stat-card__info {
+  flex: 1;
+}
+
+.access-stat-card__val {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-h);
+  line-height: 1.1;
+}
+
+.access-stat-card__lbl {
+  font-size: 12px;
+  color: var(--text);
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+/* Controls Bar */
+.access-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.access-search-box {
+  position: relative;
+  flex: 1 1 300px;
+  min-width: 260px;
+}
+
+.access-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.access-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 36px 10px 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.access-search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.access-search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px;
+}
+
+.access-filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.access-pill {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.access-pill:hover {
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.access-pill--active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.access-pill--active.access-pill--green {
+  background: #22C55E;
+  border-color: #22C55E;
+  color: #fff;
+}
+
+.access-pill--active.access-pill--red {
+  background: #EF4444;
+  border-color: #EF4444;
+  color: #fff;
+}
+
+.access-pill--active.access-pill--grey {
+  background: #6B7280;
+  border-color: #6B7280;
+  color: #fff;
+}
+
+.pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.pill-dot--green {
+  background: #22C55E;
+}
+.pill-dot--red {
+  background: #EF4444;
+}
+.pill-dot--grey {
+  background: #9CA3AF;
+}
+
+.access-view-switch {
+  display: flex;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.access-view-btn {
+  border: none;
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.access-view-btn.is-active {
+  background: var(--bg);
+  color: var(--text-h);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Bus Grid */
+.access-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.access-bus-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  animation: cardFadeIn 0.4s ease-out backwards;
+}
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.access-bus-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.12);
+}
+
+.access-bus-card.card--available {
+  border-top: 3px solid #22C55E;
+}
+.access-bus-card.card--unavailable {
+  border-top: 3px solid #EF4444;
+}
+.access-bus-card.card--unknown {
+  border-top: 3px solid #9CA3AF;
+}
+
+.access-bus-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.access-bus-card__route-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.access-bus-card__route-badge {
+  background: #e8710a;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 6px rgba(232, 113, 10, 0.35);
+}
+
+.access-bus-card__eta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.eta-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.eta-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.access-bus-card__status-row {
+  display: flex;
+  align-items: center;
+}
+
+.access-bus-card__details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.access-bus-card__detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.detail-name {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.access-bus-card__meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.meta-tag {
+  font-size: 11px;
+  background: var(--code-bg);
+  color: var(--text);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.access-bus-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.access-card-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.access-card-btn:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.access-card-btn--highlight {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* Table View */
+.access-table-wrapper {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow-x: auto;
+  box-shadow: var(--shadow);
+}
+
+.access-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.access-table th {
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-weight: 700;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.access-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.access-table tbody tr:hover {
+  background: var(--accent-bg);
+}
+
+.table-bus-id {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-h);
+}
+
+.table-route-badge {
+  background: #e8710a;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.table-route-name {
+  font-size: 11px;
+  color: var(--text);
+  margin-top: 2px;
+}
+
+.table-eta-badge {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.access-table-action-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Empty & Loading States */
+.access-empty-state,
+.access-loading-state {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 48px 24px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.access-empty-icon,
+.access-spinner-large {
+  font-size: 42px;
+  line-height: 1;
+}
+
+.access-spinner-large {
+  animation: wc-pulse 1.5s infinite ease-in-out;
+}
+
+.access-empty-state h3,
+.access-loading-state h3 {
+  margin: 0;
+  color: var(--text-h);
+  font-size: 18px;
+}
+
+.access-empty-state p,
+.access-loading-state p {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  max-width: 420px;
+}
+
+@media (max-width: 768px) {
+  .access-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .access-hero__meta {
+    align-items: flex-start;
+    width: 100%;
+  }
+  .access-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

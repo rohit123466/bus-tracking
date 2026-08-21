@@ -38,6 +38,7 @@ public class BusSearchService {
                 .speedKmh(event.getSpeedKmh())
                 .bearing(event.getBearing())
                 .lastUpdatedEpochSeconds(event.getTimestamp())
+                .wheelchairSpaceAvailable(event.getWheelchairSpaceAvailable())
                 .route(routeDetail)
                 .build();
     }

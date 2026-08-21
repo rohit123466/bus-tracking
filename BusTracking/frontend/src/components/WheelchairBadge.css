@@ -1,0 +1,93 @@
+.wheelchair-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  background-color: var(--wc-bg, rgba(156, 163, 175, 0.12));
+  color: var(--wc-color, #9CA3AF);
+  border: 1px solid var(--wc-border, rgba(156, 163, 175, 0.3));
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  vertical-align: middle;
+}
+
+.wheelchair-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.wheelchair-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+}
+
+/* Status variants */
+.wheelchair-badge--available .wheelchair-icon {
+  animation: wc-pulse 2.5s infinite ease-in-out;
+}
+
+.wheelchair-badge--unavailable .wheelchair-icon {
+  opacity: 0.95;
+}
+
+.wheelchair-badge--unknown .wheelchair-icon {
+  opacity: 0.75;
+}
+
+/* Sizes */
+.wheelchair-badge--sm {
+  padding: 2px 6px;
+  font-size: 11px;
+  gap: 4px;
+}
+.wheelchair-badge--sm .wheelchair-icon {
+  font-size: 12px;
+}
+
+.wheelchair-badge--md {
+  padding: 4px 10px;
+  font-size: 12px;
+  gap: 6px;
+}
+.wheelchair-badge--md .wheelchair-icon {
+  font-size: 14px;
+}
+
+.wheelchair-badge--lg {
+  padding: 6px 14px;
+  font-size: 14px;
+  gap: 8px;
+}
+.wheelchair-badge--lg .wheelchair-icon {
+  font-size: 18px;
+}
+
+/* Icon only variant */
+.wheelchair-badge:not(:has(.wheelchair-label)) {
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+.wheelchair-badge--sm:not(:has(.wheelchair-label)) {
+  padding: 2px 4px;
+}
+
+.wheelchair-badge--lg:not(:has(.wheelchair-label)) {
+  padding: 6px 8px;
+}
+
+@keyframes wc-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}

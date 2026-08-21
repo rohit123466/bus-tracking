@@ -8,6 +8,7 @@ import PassingNearMePage from './pages/PassingNearMePage';
 import JourneyPlannerPage from './pages/JourneyPlannerPage';
 import ReplayPage from './pages/ReplayPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
+import AccessibilityPage from './pages/AccessibilityPage';
 import './App.css';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
         <div className="page-outlet">
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/accessibility" element={<AccessibilityPage />} />
             <Route path="/search" element={<BusSearchPage />} />
             <Route path="/route" element={<RouteDetailPage />} />
             <Route path="/stops" element={<StopsNearbyPage />} />

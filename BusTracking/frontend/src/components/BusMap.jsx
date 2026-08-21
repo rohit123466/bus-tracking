@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, ZoomControl, useMap } from 'react-leaflet';
 import { userIcon, stopIcon, busIcon } from '../utils/leafletIcons';
+import WheelchairBadge from './WheelchairBadge';
 
 const DELHI_CENTER = [28.6139, 77.209];
 
@@ -52,9 +53,14 @@ export default function BusMap({ userLocation, buses, selectedRoute, onSelectSto
           icon={busIcon(bus.routeCode)}
         >
           <Popup>
-            <strong>Route {bus.routeCode}</strong>
-            {bus.routeName ? ` — ${bus.routeName}` : ''}
-            <br />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
+              <strong>Route {bus.routeCode}</strong>
+              <WheelchairBadge status={bus.wheelchairSpaceAvailable} showLabel={false} size="sm" />
+            </div>
+            {bus.routeName ? `${bus.routeName}` : ''}
+            <div style={{ margin: '4px 0' }}>
+              <WheelchairBadge status={bus.wheelchairSpaceAvailable} showLabel={true} size="sm" />
+            </div>
             Vehicle: {bus.vehicleId}
             <br />
             ETA: {bus.etaMinutes != null ? `${bus.etaMinutes} min` : 'N/A'}

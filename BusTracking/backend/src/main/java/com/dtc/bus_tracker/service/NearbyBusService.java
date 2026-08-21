@@ -56,6 +56,7 @@ public class NearbyBusService {
                         .distanceToStop(minStopDist)
                         .distanceToUser(distanceToUser)
                         .etaMinutes(etaMinutes)
+                        .wheelchairSpaceAvailable(bus.getWheelchairSpaceAvailable())
                         .build());
             }
         }

@@ -19,4 +19,6 @@ public class BusLocationEvent implements Serializable {
     private Double speedKmh;
     /** Compass degrees, 0-360. Null when the source feed doesn't report it. */
     private Double bearing;
+    /** Wheelchair space availability status. True = available, False = not available, Null = unknown */
+    private Boolean wheelchairSpaceAvailable;
 }
