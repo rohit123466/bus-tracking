@@ -7,6 +7,7 @@ public class StopDto {
     private Double latitude;
     private Double longitude;
     private Integer sequenceNumber;
+    private Boolean wheelchairBoarding;
 
     // Manual getters
     public Long getId() { return id; }
@@ -15,6 +16,7 @@ public class StopDto {
     public Double getLatitude() { return latitude; }
     public Double getLongitude() { return longitude; }
     public Integer getSequenceNumber() { return sequenceNumber; }
+    public Boolean getWheelchairBoarding() { return wheelchairBoarding; }
 
     // Manual setters
     public void setId(Long id) { this.id = id; }
@@ -23,4 +25,5 @@ public class StopDto {
     public void setLatitude(Double latitude) { this.latitude = latitude; }
     public void setLongitude(Double longitude) { this.longitude = longitude; }
     public void setSequenceNumber(Integer sequenceNumber) { this.sequenceNumber = sequenceNumber; }
+    public void setWheelchairBoarding(Boolean wheelchairBoarding) { this.wheelchairBoarding = wheelchairBoarding; }
 }

@@ -9,4 +9,7 @@ import java.util.Optional;
 public interface TripRepository extends JpaRepository<Trip, Long> {
     Optional<Trip> findByTripId(String tripId);
     Optional<Trip> findFirstByRoute_Id(Long routeId);
+
+    /** Whether any trip on this route is marked wheelchair-accessible in the GTFS feed. */
+    boolean existsByRoute_IdAndWheelchairAccessibleTrue(Long routeId);
 }

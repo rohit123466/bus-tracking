@@ -62,8 +62,8 @@ public class GtfsImportService {
         this.stopTimeRepository = stopTimeRepository;
     }
 
-    private record StopRow(String stopId, String name, double lat, double lon) {}
-    private record TripRow(String routeCode, String serviceId, String tripId, String shapeId) {}
+    private record StopRow(String stopId, String name, double lat, double lon, boolean wheelchairBoarding) {}
+    private record TripRow(String routeCode, String serviceId, String tripId, String shapeId, boolean wheelchairAccessible) {}
 
     /**
      * A real GTFS feed zip is many MB; an unresolved Git LFS pointer file is a
@@ -152,10 +152,12 @@ public class GtfsImportService {
         List<StopRow> rows = new ArrayList<>();
         withZipEntry("stops.txt", zis -> {
             try (CSVReader reader = new CSVReader(new InputStreamReader(zis))) {
-                reader.readNext();
+                String[] header = reader.readNext();
+                int wheelchairIdx = columnIndex(header, "wheelchair_boarding");
                 String[] row;
                 while ((row = reader.readNext()) != null) {
-                    rows.add(new StopRow(row[1], row[4], Double.parseDouble(row[2]), Double.parseDouble(row[3])));
+                    rows.add(new StopRow(row[1], row[4], Double.parseDouble(row[2]), Double.parseDouble(row[3]),
+                            isFlagSet(row, wheelchairIdx)));
                 }
             }
         });
@@ -166,14 +168,34 @@ public class GtfsImportService {
         List<TripRow> rows = new ArrayList<>();
         withZipEntry("trips.txt", zis -> {
             try (CSVReader reader = new CSVReader(new InputStreamReader(zis))) {
-                reader.readNext();
+                String[] header = reader.readNext();
+                int wheelchairIdx = columnIndex(header, "wheelchair_accessible");
                 String[] row;
                 while ((row = reader.readNext()) != null) {
-                    rows.add(new TripRow(row[0], row[1], row[2], row.length > 3 ? row[3] : null));
+                    rows.add(new TripRow(row[0], row[1], row[2], row.length > 3 ? row[3] : null,
+                            isFlagSet(row, wheelchairIdx)));
                 }
             }
         });
         return rows;
+    }
+
+    /**
+     * wheelchair_accessible/wheelchair_boarding are optional GTFS columns (not
+     * present at a fixed position, and absent entirely from the bundled feed),
+     * so look them up by header name and default to false/unknown when missing
+     * or set to "1" (accessible) per the GTFS spec.
+     */
+    private int columnIndex(String[] header, String columnName) {
+        if (header == null) return -1;
+        for (int i = 0; i < header.length; i++) {
+            if (columnName.equalsIgnoreCase(header[i].trim())) return i;
+        }
+        return -1;
+    }
+
+    private boolean isFlagSet(String[] row, int columnIndex) {
+        return columnIndex >= 0 && columnIndex < row.length && "1".equals(row[columnIndex].trim());
     }
 
     private Set<String> collectTripIdsForStops(Set<String> keptStopIds) throws Exception {
@@ -226,6 +248,7 @@ public class GtfsImportService {
                     .name(row.name())
                     .latitude(row.lat())
                     .longitude(row.lon())
+                    .wheelchairBoarding(row.wheelchairBoarding())
                     .build();
             stopRepository.save(stop);
             byStopId.put(row.stopId(), stop);
@@ -248,6 +271,7 @@ public class GtfsImportService {
                     .serviceId(row.serviceId())
                     .shapeId(row.shapeId())
                     .route(route)
+                    .wheelchairAccessible(row.wheelchairAccessible())
                     .build();
             tripRepository.save(trip);
             byTripId.put(row.tripId(), trip);

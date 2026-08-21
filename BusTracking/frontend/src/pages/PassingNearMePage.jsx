@@ -65,12 +65,36 @@ export default function PassingNearMePage() {
         </thead>
         <tbody>
           {buses.map((b, i) => (
-            <tr key={`${b.vehicleId}-${b.stopName}-${i}`}>
+            <tr
+              key={`${b.vehicleId}-${b.stopName}-${i}`}
+              aria-label={
+                `Route ${b.routeCode}${b.routeName ? ` — ${b.routeName}` : ''}, ` +
+                `heading to ${b.destination || 'unknown destination'}, ` +
+                `near ${b.stopName}, ${Math.round(b.distanceToStopMeters)} meters away, ETA ${b.etaMinutes} minutes` +
+                (b.wheelchairAccessible
+                  ? `, wheelchair accessible with ${b.wheelchairSpaces} reserved space${b.wheelchairSpaces === 1 ? '' : 's'} for wheelchair users only`
+                  : '')
+              }
+            >
               <td>
+<<<<<<< HEAD
+                {b.routeCode} {b.routeName ? `— ${b.routeName}` : ''}
+                {b.wheelchairAccessible && (
+                  <span
+                    role="img"
+                    aria-label="Wheelchair accessible"
+                    title={`Wheelchair accessible — ${b.wheelchairSpaces} reserved space${b.wheelchairSpaces === 1 ? '' : 's'} for wheelchair users only`}
+                    style={{ marginLeft: 6 }}
+                  >
+                    ♿
+                  </span>
+                )}
+=======
                 <strong>{b.routeCode}</strong> {b.routeName ? `— ${b.routeName}` : ''}
               </td>
               <td>
                 <WheelchairBadge status={b.wheelchairSpaceAvailable} showLabel={true} size="sm" />
+>>>>>>> 427d9c8f074a1a43e801c6162624d66cf4cd129b
               </td>
               <td>{b.destination || '—'}</td>
               <td>{b.stopName}</td>

@@ -41,4 +41,13 @@ public class Trip {
 
     @Enumerated(EnumType.STRING)
     private TripStatus status;
+
+    /**
+     * GTFS trips.txt wheelchair_accessible == "1". Null when the feed omits the
+     * column; a boxed type is required here (not primitive boolean) since
+     * `ddl-auto=update` adds this column to an already-seeded database without
+     * backfilling existing rows, leaving them NULL.
+     */
+    @Column(name = "wheelchair_accessible")
+    private Boolean wheelchairAccessible;
 }

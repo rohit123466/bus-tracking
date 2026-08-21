@@ -51,6 +51,24 @@
   font-weight: 600;
 }
 
+.voice-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  font-size: 15px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.voice-toggle-on {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
 .page-outlet {
   position: relative;
   flex: 1 1 auto;
@@ -104,6 +122,19 @@
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-h);
+}
+
+.inline-form input[type='checkbox'] {
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 0;
+}
+
+.inline-form label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .inline-form button {
@@ -417,6 +448,57 @@
   border: 1px solid #f3c2bb;
 }
 
+.banner-arrival {
+  background: #fff4cc;
+  color: #614a00;
+  border: 2px solid #e8b400;
+  font-weight: 700;
+  font-size: 15px;
+  animation: banner-flash 1s ease-in-out 3;
+}
+
+.accessibility-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.accessibility-section strong {
+  display: block;
+  font-size: 13px;
+}
+
+.accessibility-section p {
+  margin: 2px 0 0;
+  color: var(--text);
+}
+
+.accessibility-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.accessibility-yes {
+  background: #eafaf0;
+  border: 1px solid #a9e4c1;
+  color: #1f7a45;
+}
+
+.accessibility-no {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+@keyframes banner-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 /* Leaflet marker styling */
 .user-dot {
   width: 16px;
@@ -465,4 +547,26 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
+<<<<<<< HEAD
+@media (prefers-color-scheme: dark) {
+  .banner-error {
+    background: #3a1a17;
+    color: #f5a397;
+    border-color: #6b2c24;
+  }
 
+  .banner-arrival {
+    background: #4a3b00;
+    color: #ffe27a;
+    border-color: #a67c00;
+  }
+
+  .accessibility-yes {
+    background: #123822;
+    border-color: #1f7a45;
+    color: #8be6ac;
+  }
+}
+=======
+
+>>>>>>> 427d9c8f074a1a43e801c6162624d66cf4cd129b

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
 import { getRouteDetail, searchRoutes } from '../api/client';
-import { busIcon, stopIcon } from '../utils/leafletIcons';
+import { busIcon, stopIconFor } from '../utils/leafletIcons';
 import StopProgressList from '../components/StopProgressList';
+import AccessibilityInfo from '../components/AccessibilityInfo';
 
 const DELHI_CENTER = [28.6139, 77.209];
 
@@ -106,7 +107,13 @@ export default function RouteDetailPage() {
                 <h3>
                   Route {detail.routeCode}
                   {detail.name ? ` — ${detail.name}` : ''}
+                  {detail.wheelchairAccessible && (
+                    <span role="img" aria-label="Wheelchair accessible" title="Wheelchair accessible" style={{ marginLeft: 8 }}>
+                      ♿
+                    </span>
+                  )}
                 </h3>
+                <AccessibilityInfo accessible={detail.wheelchairAccessible} spaces={detail.wheelchairSpaces} />
                 {detail.etaToNextStopMinutes != null && (
                   <p>ETA to next stop: {detail.etaToNextStopMinutes} min</p>
                 )}
@@ -121,7 +128,7 @@ export default function RouteDetailPage() {
                   />
                   {polyline.length > 0 && <Polyline positions={polyline} pathOptions={{ color: '#aa3bff', weight: 4 }} />}
                   {detail.stops.map((s) => (
-                    <Marker key={s.stopId} position={[s.latitude, s.longitude]} icon={stopIcon}>
+                    <Marker key={s.stopId} position={[s.latitude, s.longitude]} icon={stopIconFor(s.name)}>
                       <Popup>
                         {s.sequence}. {s.name}
                       </Popup>

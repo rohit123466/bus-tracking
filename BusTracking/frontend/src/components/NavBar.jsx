@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import useVoiceAnnouncements from '../hooks/useVoiceAnnouncements';
 
 const LINKS = [
   { to: '/', label: '🗺️ Live Map', end: true },
@@ -13,6 +14,8 @@ const LINKS = [
 ];
 
 export default function NavBar() {
+  const [voiceEnabled, toggleVoice] = useVoiceAnnouncements();
+
   return (
     <nav className="nav-bar">
       <span className="nav-brand">🚍 Delhi Bus Tracker</span>
@@ -28,6 +31,16 @@ export default function NavBar() {
           </NavLink>
         ))}
       </div>
+      <button
+        type="button"
+        className={'voice-toggle' + (voiceEnabled ? ' voice-toggle-on' : '')}
+        onClick={toggleVoice}
+        aria-pressed={voiceEnabled}
+        aria-label={voiceEnabled ? 'Voice stop announcements on. Click to turn off.' : 'Voice stop announcements off. Click to turn on.'}
+        title={voiceEnabled ? 'Voice announcements: on' : 'Voice announcements: off'}
+      >
+        {voiceEnabled ? '🔊' : '🔇'}
+      </button>
     </nav>
   );
 }
