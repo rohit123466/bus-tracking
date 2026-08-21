@@ -13,4 +13,7 @@ public class PassingBusResponse {
     private String destination;
     private Double distanceToStopMeters;
     private Integer etaMinutes;
+    private Boolean wheelchairAccessible;
+    /** Reserved wheelchair spaces on board when wheelchairAccessible is true, else 0. */
+    private Integer wheelchairSpaces;
 }

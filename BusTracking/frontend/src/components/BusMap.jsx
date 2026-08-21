@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, ZoomControl, useMap } from 'react-leaflet';
-import { userIcon, stopIcon, busIcon } from '../utils/leafletIcons';
+import { userIcon, stopIconFor, busIcon } from '../utils/leafletIcons';
 
 const DELHI_CENTER = [28.6139, 77.209];
 
@@ -82,7 +82,7 @@ export default function BusMap({ userLocation, buses, selectedRoute, onSelectSto
               <Marker
                 key={stop.id}
                 position={[stop.lat, stop.lng]}
-                icon={stopIcon}
+                icon={stopIconFor(stop.name)}
                 eventHandlers={{ click: () => onSelectStop?.(stop) }}
               >
                 <Popup>

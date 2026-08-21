@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getBusByVehicleId } from '../api/client';
 import StopProgressList from '../components/StopProgressList';
+import AccessibilityInfo from '../components/AccessibilityInfo';
 
 export default function BusSearchPage() {
   const [vehicleId, setVehicleId] = useState('');
@@ -8,6 +9,7 @@ export default function BusSearchPage() {
   const [bus, setBus] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [wheelchairOnly, setWheelchairOnly] = useState(false);
   const pollRef = useRef(null);
 
   const search = (id) => {
@@ -53,16 +55,36 @@ export default function BusSearchPage() {
         <button type="submit" disabled={loading}>
           {loading ? 'Searching…' : 'Search'}
         </button>
+        <label>
+          <input
+            type="checkbox"
+            checked={wheelchairOnly}
+            onChange={(e) => setWheelchairOnly(e.target.checked)}
+          />
+          Wheelchair accessible only
+        </label>
       </form>
 
       {error && <div className="banner banner-error" style={{ position: 'static', marginTop: 12 }}>{error}</div>}
 
-      {bus && (
+      {bus && wheelchairOnly && !bus.wheelchairAccessible && (
+        <p style={{ marginTop: 12 }}>
+          Bus {bus.vehicleId} isn't marked wheelchair-accessible. Uncheck "Wheelchair accessible only" to see it anyway.
+        </p>
+      )}
+
+      {bus && (!wheelchairOnly || bus.wheelchairAccessible) && (
         <div className="card" style={{ marginTop: 16 }}>
           <h3>
             {bus.vehicleId} — Route {bus.routeCode}
             {bus.routeName ? ` (${bus.routeName})` : ''}
+            {bus.wheelchairAccessible && (
+              <span role="img" aria-label="Wheelchair accessible" title="Wheelchair accessible" style={{ marginLeft: 8 }}>
+                ♿
+              </span>
+            )}
           </h3>
+          <AccessibilityInfo accessible={bus.wheelchairAccessible} spaces={bus.wheelchairSpaces} />
           <div className="kv-grid">
             <div>Speed</div>
             <div>{bus.speedKmh != null ? `${bus.speedKmh.toFixed(1)} km/h` : 'Unknown'}</div>

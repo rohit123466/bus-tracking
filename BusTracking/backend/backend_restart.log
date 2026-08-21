@@ -1,0 +1,170 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.1.0)
+
+2026-08-21T13:03:23.753+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] c.dtc.bus_tracker.BusTrackerApplication  : Starting BusTrackerApplication using Java 21.0.4 with PID 21872 (C:\Users\ROHIT JAIN\Desktop\bus\BusTracking\backend\target\classes started by ROHIT JAIN in C:\Users\ROHIT JAIN\Desktop\bus\BusTracking\backend)
+2026-08-21T13:03:23.760+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] c.dtc.bus_tracker.BusTrackerApplication  : The following 1 profile is active: "demo"
+2026-08-21T13:03:23.849+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-08-21T13:03:23.849+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-08-21T13:03:25.603+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-08-21T13:03:25.609+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-21T13:03:25.829+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 213 ms. Found 7 JPA repository interfaces.
+2026-08-21T13:03:25.898+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-08-21T13:03:25.898+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-08-21T13:03:25.925+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.dtc.bus_tracker.repository.AdminUserRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-21T13:03:25.925+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.dtc.bus_tracker.repository.BusLocationRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-21T13:03:25.925+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.dtc.bus_tracker.repository.BusRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-21T13:03:25.925+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.dtc.bus_tracker.repository.RouteRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-21T13:03:25.925+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.dtc.bus_tracker.repository.StopRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-21T13:03:25.925+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.dtc.bus_tracker.repository.StopTimeRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-21T13:03:25.927+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.dtc.bus_tracker.repository.TripRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-21T13:03:25.927+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 10 ms. Found 0 Redis repository interfaces.
+2026-08-21T13:03:26.862+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
+2026-08-21T13:03:26.881+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-08-21T13:03:26.881+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.22]
+2026-08-21T13:03:26.948+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 3097 ms
+2026-08-21T13:03:27.284+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-08-21T13:03:27.370+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.1.Final
+2026-08-21T13:03:27.995+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-21T13:03:28.036+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-08-21T13:03:28.475+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:file:./data/busdemo user=SA
+2026-08-21T13:03:28.478+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-08-21T13:03:28.513+05:30  WARN 21872 --- [bus-tracker] [  restartedMain] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-08-21T13:03:28.565+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:h2:file:./data/busdemo]
+	Database driver: H2 JDBC Driver
+	Database dialect: H2Dialect
+	Database version: 2.4.240
+	Default catalog/schema: BUSDEMO/PUBLIC
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: 100
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-21T13:03:30.950+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-21T13:03:31.208+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-21T13:03:31.331+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-08-21T13:03:34.102+05:30  WARN 21872 --- [bus-tracker] [  restartedMain] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-08-21T13:03:34.147+05:30  WARN 21872 --- [bus-tracker] [  restartedMain] .s.a.UserDetailsServiceAutoConfiguration : 
+
+Using generated security password: 05fd826c-fd7e-41df-b003-3dce772ecf8b
+
+This generated password is for development use only. Your security configuration must be updated before running your application in production.
+
+2026-08-21T13:03:34.152+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager
+2026-08-21T13:03:34.918+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
+2026-08-21T13:03:35.736+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] o.s.m.s.b.SimpleBrokerMessageHandler     : Starting...
+2026-08-21T13:03:35.736+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] o.s.m.s.b.SimpleBrokerMessageHandler     : BrokerAvailabilityEvent[available=true, SimpleBrokerMessageHandler [org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry@5dd94b3b]]
+2026-08-21T13:03:35.748+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] o.s.m.s.b.SimpleBrokerMessageHandler     : Started.
+2026-08-21T13:03:35.765+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'
+2026-08-21T13:03:35.785+05:30  INFO 21872 --- [bus-tracker] [  restartedMain] c.dtc.bus_tracker.BusTrackerApplication  : Started BusTrackerApplication in 12.781 seconds (process running for 13.773)
+GTFS already seeded, skipping import.
+DTC ingestion failed: DTC API returned invalid response: status=200
+java.lang.RuntimeException: DTC API returned invalid response: status=200
+	at com.dtc.bus_tracker.service.DtcApiClient.fetchVehiclePositions(DtcApiClient.java:37)
+	at com.dtc.bus_tracker.service.DtcIngestionService.pollAndPublish(DtcIngestionService.java:49)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:358)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:305)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+2026-08-21T13:03:37.657+05:30  INFO 21872 --- [bus-tracker] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-08-21T13:03:37.657+05:30  INFO 21872 --- [bus-tracker] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-08-21T13:03:37.665+05:30  INFO 21872 --- [bus-tracker] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 8 ms
+2026-08-21T13:03:46.705+05:30  WARN 21872 --- [bus-tracker] [MessageBroker-2] com.google.protobuf.GeneratedMessage     : Vulnerable protobuf generated type in use: com.google.transit.realtime.GtfsRealtime$FeedHeader
+As of 2022/09/29 (release 21.7) makeExtensionsImmutable should not be called from protobuf gencode. If you are seeing this message, your gencode is vulnerable to a denial of service attack. You should regenerate your code using protobuf 25.6 or later. Use the latest version that meets your needs. However, if you understand the risks and wish to continue with vulnerable gencode, you can set the system property `-Dcom.google.protobuf.use_unsafe_pre22_gencode` on the command line to silence this warning. You also can set `-Dcom.google.protobuf.error_on_unsafe_pre22_gencode` to throw an error instead. See security vulnerability: https://github.com/protocolbuffers/protobuf/security/advisories/GHSA-h4h5-3hr4-j3g2
+2026-08-21T13:03:46.716+05:30  WARN 21872 --- [bus-tracker] [MessageBroker-2] com.google.protobuf.GeneratedMessage     : Vulnerable protobuf generated type in use: com.google.transit.realtime.GtfsRealtime$TripDescriptor
+As of 2022/09/29 (release 21.7) makeExtensionsImmutable should not be called from protobuf gencode. If you are seeing this message, your gencode is vulnerable to a denial of service attack. You should regenerate your code using protobuf 25.6 or later. Use the latest version that meets your needs. However, if you understand the risks and wish to continue with vulnerable gencode, you can set the system property `-Dcom.google.protobuf.use_unsafe_pre22_gencode` on the command line to silence this warning. You also can set `-Dcom.google.protobuf.error_on_unsafe_pre22_gencode` to throw an error instead. See security vulnerability: https://github.com/protocolbuffers/protobuf/security/advisories/GHSA-h4h5-3hr4-j3g2
+2026-08-21T13:03:46.717+05:30  WARN 21872 --- [bus-tracker] [MessageBroker-2] com.google.protobuf.GeneratedMessage     : Vulnerable protobuf generated type in use: com.google.transit.realtime.GtfsRealtime$Position
+As of 2022/09/29 (release 21.7) makeExtensionsImmutable should not be called from protobuf gencode. If you are seeing this message, your gencode is vulnerable to a denial of service attack. You should regenerate your code using protobuf 25.6 or later. Use the latest version that meets your needs. However, if you understand the risks and wish to continue with vulnerable gencode, you can set the system property `-Dcom.google.protobuf.use_unsafe_pre22_gencode` on the command line to silence this warning. You also can set `-Dcom.google.protobuf.error_on_unsafe_pre22_gencode` to throw an error instead. See security vulnerability: https://github.com/protocolbuffers/protobuf/security/advisories/GHSA-h4h5-3hr4-j3g2
+2026-08-21T13:03:46.719+05:30  WARN 21872 --- [bus-tracker] [MessageBroker-2] com.google.protobuf.GeneratedMessage     : Vulnerable protobuf generated type in use: com.google.transit.realtime.GtfsRealtime$VehicleDescriptor
+As of 2022/09/29 (release 21.7) makeExtensionsImmutable should not be called from protobuf gencode. If you are seeing this message, your gencode is vulnerable to a denial of service attack. You should regenerate your code using protobuf 25.6 or later. Use the latest version that meets your needs. However, if you understand the risks and wish to continue with vulnerable gencode, you can set the system property `-Dcom.google.protobuf.use_unsafe_pre22_gencode` on the command line to silence this warning. You also can set `-Dcom.google.protobuf.error_on_unsafe_pre22_gencode` to throw an error instead. See security vulnerability: https://github.com/protocolbuffers/protobuf/security/advisories/GHSA-h4h5-3hr4-j3g2
+2026-08-21T13:03:46.719+05:30  WARN 21872 --- [bus-tracker] [MessageBroker-2] com.google.protobuf.GeneratedMessage     : Vulnerable protobuf generated type in use: com.google.transit.realtime.GtfsRealtime$VehiclePosition
+As of 2022/09/29 (release 21.7) makeExtensionsImmutable should not be called from protobuf gencode. If you are seeing this message, your gencode is vulnerable to a denial of service attack. You should regenerate your code using protobuf 25.6 or later. Use the latest version that meets your needs. However, if you understand the risks and wish to continue with vulnerable gencode, you can set the system property `-Dcom.google.protobuf.use_unsafe_pre22_gencode` on the command line to silence this warning. You also can set `-Dcom.google.protobuf.error_on_unsafe_pre22_gencode` to throw an error instead. See security vulnerability: https://github.com/protocolbuffers/protobuf/security/advisories/GHSA-h4h5-3hr4-j3g2
+2026-08-21T13:03:46.719+05:30  WARN 21872 --- [bus-tracker] [MessageBroker-2] com.google.protobuf.GeneratedMessage     : Vulnerable protobuf generated type in use: com.google.transit.realtime.GtfsRealtime$FeedEntity
+As of 2022/09/29 (release 21.7) makeExtensionsImmutable should not be called from protobuf gencode. If you are seeing this message, your gencode is vulnerable to a denial of service attack. You should regenerate your code using protobuf 25.6 or later. Use the latest version that meets your needs. However, if you understand the risks and wish to continue with vulnerable gencode, you can set the system property `-Dcom.google.protobuf.use_unsafe_pre22_gencode` on the command line to silence this warning. You also can set `-Dcom.google.protobuf.error_on_unsafe_pre22_gencode` to throw an error instead. See security vulnerability: https://github.com/protocolbuffers/protobuf/security/advisories/GHSA-h4h5-3hr4-j3g2
+2026-08-21T13:03:46.744+05:30  WARN 21872 --- [bus-tracker] [MessageBroker-2] com.google.protobuf.GeneratedMessage     : Vulnerable protobuf generated type in use: com.google.transit.realtime.GtfsRealtime$FeedMessage
+As of 2022/09/29 (release 21.7) makeExtensionsImmutable should not be called from protobuf gencode. If you are seeing this message, your gencode is vulnerable to a denial of service attack. You should regenerate your code using protobuf 25.6 or later. Use the latest version that meets your needs. However, if you understand the risks and wish to continue with vulnerable gencode, you can set the system property `-Dcom.google.protobuf.use_unsafe_pre22_gencode` on the command line to silence this warning. You also can set `-Dcom.google.protobuf.error_on_unsafe_pre22_gencode` to throw an error instead. See security vulnerability: https://github.com/protocolbuffers/protobuf/security/advisories/GHSA-h4h5-3hr4-j3g2
+Published 1103 bus location events (North/North West Delhi routes)
+Published 1103 bus location events (North/North West Delhi routes)
+Published 1103 bus location events (North/North West Delhi routes)
+Published 1096 bus location events (North/North West Delhi routes)
+Published 1096 bus location events (North/North West Delhi routes)
+2026-08-21T13:04:35.660+05:30  INFO 21872 --- [bus-tracker] [MessageBroker-4] o.s.w.s.c.WebSocketMessageBrokerStats    : WebSocketSession[0 current WS(0)-HttpStream(0)-HttpPoll(0), 0 total, 0 closed abnormally (0 connect failure, 0 send limit, 0 transport error)], stompSubProtocol[processed CONNECT(0)-CONNECTED(0)-DISCONNECT(0)], stompBrokerRelay[null], inboundChannel[pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 0], outboundChannel[pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 0], sockJsScheduler[pool size = 8, active threads = 1, queued tasks = 1, completed tasks = 6]
+Published 1096 bus location events (North/North West Delhi routes)
+Published 1096 bus location events (North/North West Delhi routes)
+DTC ingestion failed: DTC API returned invalid response: status=200
+java.lang.RuntimeException: DTC API returned invalid response: status=200
+	at com.dtc.bus_tracker.service.DtcApiClient.fetchVehiclePositions(DtcApiClient.java:37)
+	at com.dtc.bus_tracker.service.DtcIngestionService.pollAndPublish(DtcIngestionService.java:49)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:358)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:305)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Published 1096 bus location events (North/North West Delhi routes)
+Published 1089 bus location events (North/North West Delhi routes)
+Published 1089 bus location events (North/North West Delhi routes)
+Published 1089 bus location events (North/North West Delhi routes)
+Published 1089 bus location events (North/North West Delhi routes)
+Published 1089 bus location events (North/North West Delhi routes)
+Published 0 bus location events (North/North West Delhi routes)
+Published 1089 bus location events (North/North West Delhi routes)
+Published 1089 bus location events (North/North West Delhi routes)
+2026-08-21T13:06:31.003+05:30  WARN 21872 --- [bus-tracker] [nio-8080-exec-2] ration$PageModule$WarningLoggingModifier : Serializing PageImpl instances as-is is not supported, meaning that there is no guarantee about the stability of the resulting JSON structure!
+	For a stable JSON structure, please use Spring Data's PagedModel (globally via @EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO))
+	or Spring HATEOAS and Spring Data's PagedResourcesAssembler as documented in https://docs.spring.io/spring-data/commons/reference/repositories/core-extensions.html#core.web.pageables.
+
+Published 1089 bus location events (North/North West Delhi routes)
+Published 1084 bus location events (North/North West Delhi routes)
+Published 1084 bus location events (North/North West Delhi routes)
+Published 1084 bus location events (North/North West Delhi routes)
+Published 1088 bus location events (North/North West Delhi routes)
+Published 1088 bus location events (North/North West Delhi routes)
+Published 1086 bus location events (North/North West Delhi routes)
+Published 1086 bus location events (North/North West Delhi routes)
+Published 1086 bus location events (North/North West Delhi routes)
+Published 1086 bus location events (North/North West Delhi routes)
+Published 1087 bus location events (North/North West Delhi routes)
+Published 1087 bus location events (North/North West Delhi routes)
+Published 1087 bus location events (North/North West Delhi routes)
+Published 1077 bus location events (North/North West Delhi routes)
+Published 1076 bus location events (North/North West Delhi routes)
+Published 1077 bus location events (North/North West Delhi routes)
+Published 1077 bus location events (North/North West Delhi routes)
+Published 1077 bus location events (North/North West Delhi routes)
+Published 1077 bus location events (North/North West Delhi routes)
+Published 0 bus location events (North/North West Delhi routes)
+Published 1077 bus location events (North/North West Delhi routes)
+Published 1077 bus location events (North/North West Delhi routes)
+Published 1073 bus location events (North/North West Delhi routes)
+Published 1073 bus location events (North/North West Delhi routes)
+Published 1073 bus location events (North/North West Delhi routes)
+Published 1073 bus location events (North/North West Delhi routes)
+Published 1073 bus location events (North/North West Delhi routes)
+Published 1073 bus location events (North/North West Delhi routes)

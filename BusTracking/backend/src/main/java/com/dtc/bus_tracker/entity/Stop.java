@@ -33,6 +33,10 @@ public class Stop {
     @Column(name = "sequence_number")
     private Integer sequenceNumber;
 
+    /** GTFS stops.txt wheelchair_boarding == "1". Null when the feed omits the column. */
+    @Column(name = "wheelchair_boarding")
+    private Boolean wheelchairBoarding;
+
     @Builder.Default
     @ManyToMany
     @JoinTable(
@@ -49,6 +53,7 @@ public class Stop {
     public Double getLatitude() { return latitude; }
     public Double getLongitude() { return longitude; }
     public Integer getSequenceNumber() { return sequenceNumber; }
+    public Boolean getWheelchairBoarding() { return wheelchairBoarding; }
     public List<Route> getRoutes() { return routes; }
 
     // Setters
@@ -58,5 +63,6 @@ public class Stop {
     public void setLatitude(Double latitude) { this.latitude = latitude; }
     public void setLongitude(Double longitude) { this.longitude = longitude; }
     public void setSequenceNumber(Integer sequenceNumber) { this.sequenceNumber = sequenceNumber; }
+    public void setWheelchairBoarding(Boolean wheelchairBoarding) { this.wheelchairBoarding = wheelchairBoarding; }
     public void setRoutes(List<Route> routes) { this.routes = routes; }
 }

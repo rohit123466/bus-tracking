@@ -8,9 +8,11 @@ import com.dtc.bus_tracker.entity.Route;
 import com.dtc.bus_tracker.entity.Stop;
 import com.dtc.bus_tracker.exception.ResourceNotFoundException;
 import com.dtc.bus_tracker.repository.RouteRepository;
+import com.dtc.bus_tracker.repository.TripRepository;
 import com.dtc.bus_tracker.util.EtaCalculator;
 import com.dtc.bus_tracker.util.GeoUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -23,6 +25,11 @@ public class RouteDetailService {
     private final RouteRepository routeRepository;
     private final RouteStopSequenceService routeStopSequenceService;
     private final BusLocationStore busLocationStore;
+    private final TripRepository tripRepository;
+
+    /** No per-vehicle seat data in GTFS - fixed count reflecting DTC's standard low-floor fit-out. */
+    @Value("${dtc.accessibility.wheelchair-spaces:2}")
+    private int wheelchairSpaces;
 
     public RouteDetailResponse getDetail(Long routeId, String vehicleId) {
         Route route = routeRepository.findById(routeId)
@@ -51,6 +58,7 @@ public class RouteDetailService {
                     .longitude(stop.getLongitude())
                     .sequence(i + 1)
                     .progress(currentIndex < 0 ? null : progressFor(i, currentIndex))
+                    .wheelchairBoarding(stop.getWheelchairBoarding())
                     .build());
         }
 
@@ -63,10 +71,14 @@ public class RouteDetailService {
             etaToNextStopMinutes = EtaCalculator.estimateMinutes(distance, liveEvent.getSpeedKmh());
         }
 
+        boolean wheelchairAccessible = tripRepository.existsByRoute_IdAndWheelchairAccessibleTrue(route.getId());
+
         return RouteDetailResponse.builder()
                 .id(route.getId())
                 .routeCode(route.getRouteCode())
                 .name(route.getName())
+                .wheelchairAccessible(wheelchairAccessible)
+                .wheelchairSpaces(wheelchairAccessible ? wheelchairSpaces : 0)
                 .stops(infos)
                 .trackedVehicleId(liveEvent != null ? vehicleId : null)
                 .vehicleLatitude(liveEvent != null ? liveEvent.getLatitude() : null)

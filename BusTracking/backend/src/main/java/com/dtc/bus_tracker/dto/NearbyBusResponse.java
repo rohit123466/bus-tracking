@@ -10,6 +10,9 @@ public class NearbyBusResponse {
     private Integer etaMinutes;
     private Double busLatitude;
     private Double busLongitude;
+    private Boolean wheelchairAccessible;
+    /** Reserved wheelchair spaces on board when wheelchairAccessible is true, else 0. */
+    private Integer wheelchairSpaces;
 
     // Builder pattern
     public static Builder builder() { return new Builder(); }
@@ -25,6 +28,8 @@ public class NearbyBusResponse {
         public Builder etaMinutes(Integer etaMinutes) { response.etaMinutes = etaMinutes; return this; }
         public Builder busLatitude(Double busLatitude) { response.busLatitude = busLatitude; return this; }
         public Builder busLongitude(Double busLongitude) { response.busLongitude = busLongitude; return this; }
+        public Builder wheelchairAccessible(Boolean wheelchairAccessible) { response.wheelchairAccessible = wheelchairAccessible; return this; }
+        public Builder wheelchairSpaces(Integer wheelchairSpaces) { response.wheelchairSpaces = wheelchairSpaces; return this; }
         public NearbyBusResponse build() { return response; }
     }
 
@@ -38,4 +43,6 @@ public class NearbyBusResponse {
     public Integer getEtaMinutes() { return etaMinutes; }
     public Double getBusLatitude() { return busLatitude; }
     public Double getBusLongitude() { return busLongitude; }
+    public Boolean getWheelchairAccessible() { return wheelchairAccessible; }
+    public Integer getWheelchairSpaces() { return wheelchairSpaces; }
 }

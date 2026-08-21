@@ -14,6 +14,9 @@ public class BusDetailResponse {
     private Double speedKmh;
     private Double bearing;
     private Long lastUpdatedEpochSeconds;
+    private Boolean wheelchairAccessible;
+    /** Reserved wheelchair spaces on board when wheelchairAccessible is true, else 0. */
+    private Integer wheelchairSpaces;
     /** Current/next/remaining stops and the full route, derived from GTFS stop_times order. */
     private RouteDetailResponse route;
 }

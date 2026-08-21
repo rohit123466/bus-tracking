@@ -8,6 +8,7 @@ export default function StopsNearbyPage() {
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [routesByStop, setRoutesByStop] = useState({});
+  const [wheelchairOnly, setWheelchairOnly] = useState(false);
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -65,14 +66,45 @@ export default function StopsNearbyPage() {
         <button onClick={search} disabled={!userLocation}>
           Refresh
         </button>
+        <label>
+          <input
+            type="checkbox"
+            checked={wheelchairOnly}
+            onChange={(e) => setWheelchairOnly(e.target.checked)}
+          />
+          Wheelchair accessible only
+        </label>
       </div>
 
       <ul className="list-cards">
-        {stops.map((stop) => (
+        {stops
+          .filter((stop) => !wheelchairOnly || stop.wheelchairBoarding)
+          .map((stop) => (
           <li key={stop.id} className="card">
-            <div className="card-row" onClick={() => toggleExpand(stop)} style={{ cursor: 'pointer' }}>
-              <strong>{stop.name}</strong>
-              <span>{expanded === stop.id ? '▲' : '▼'}</span>
+            <div
+              className="card-row"
+              onClick={() => toggleExpand(stop)}
+              style={{ cursor: 'pointer' }}
+              role="button"
+              tabIndex={0}
+              aria-expanded={expanded === stop.id}
+              aria-label={`${stop.name}${stop.wheelchairBoarding ? ', wheelchair accessible boarding' : ''}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleExpand(stop);
+                }
+              }}
+            >
+              <strong>
+                {stop.name}
+                {stop.wheelchairBoarding && (
+                  <span role="img" aria-label="Wheelchair accessible boarding" title="Wheelchair accessible boarding" style={{ marginLeft: 6 }}>
+                    ♿
+                  </span>
+                )}
+              </strong>
+              <span aria-hidden="true">{expanded === stop.id ? '▲' : '▼'}</span>
             </div>
             {expanded === stop.id && (
               <div className="card-expanded">
@@ -91,6 +123,9 @@ export default function StopsNearbyPage() {
           </li>
         ))}
         {stops.length === 0 && <p>No stops found nearby yet.</p>}
+        {stops.length > 0 && wheelchairOnly && stops.every((s) => !s.wheelchairBoarding) && (
+          <p>No wheelchair-accessible stops found nearby.</p>
+        )}
       </ul>
     </div>
   );
