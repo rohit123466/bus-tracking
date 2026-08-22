@@ -66,14 +66,6 @@ export default function StopsNearbyPage() {
         <button onClick={search} disabled={!userLocation}>
           Refresh
         </button>
-        <label>
-          <input
-            type="checkbox"
-            checked={wheelchairOnly}
-            onChange={(e) => setWheelchairOnly(e.target.checked)}
-          />
-          Wheelchair accessible only
-        </label>
       </div>
 
       <ul className="list-cards">

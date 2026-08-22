@@ -65,14 +65,6 @@ export default function BusSearchPage() {
         <button type="submit" disabled={loading}>
           {loading ? 'Searching…' : 'Search'}
         </button>
-        <label>
-          <input
-            type="checkbox"
-            checked={wheelchairOnly}
-            onChange={(e) => setWheelchairOnly(e.target.checked)}
-          />
-          Wheelchair accessible only
-        </label>
       </form>
 
       {error && <div className="banner banner-error" style={{ position: 'static', marginTop: 12 }}>{error}</div>}
