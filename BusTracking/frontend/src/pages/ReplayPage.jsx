@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import { getBusHistory } from '../api/client';
-import { busIcon } from '../utils/leafletIcons';
+import { vehicleIdIcon } from '../utils/leafletIcons';
 
 const DELHI_CENTER = [28.6139, 77.209];
 
@@ -91,7 +91,7 @@ export default function ReplayPage() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               <Polyline positions={path} pathOptions={{ color: '#aa3bff', weight: 3 }} />
-              {current && <Marker position={[current.latitude, current.longitude]} icon={busIcon(vehicleId)} />}
+              {current && <Marker position={[current.latitude, current.longitude]} icon={vehicleIdIcon(vehicleId)} />}
             </MapContainer>
           </div>
         </>

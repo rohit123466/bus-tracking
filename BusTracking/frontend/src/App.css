@@ -51,24 +51,6 @@
   font-weight: 600;
 }
 
-.voice-toggle {
-  flex: 0 0 auto;
-  margin-left: auto;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--code-bg);
-  font-size: 15px;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.voice-toggle-on {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
-}
-
 .page-outlet {
   position: relative;
   flex: 1 1 auto;
