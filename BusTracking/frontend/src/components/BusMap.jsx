@@ -1,11 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, ZoomControl, useMap } from 'react-leaflet';
-<<<<<<< HEAD
 import { userIcon, stopIconFor, busIcon } from '../utils/leafletIcons';
-=======
-import { userIcon, stopIcon, busIcon } from '../utils/leafletIcons';
 import WheelchairBadge from './WheelchairBadge';
->>>>>>> 427d9c8f074a1a43e801c6162624d66cf4cd129b
 
 const DELHI_CENTER = [28.6139, 77.209];
 

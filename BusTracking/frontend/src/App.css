@@ -547,26 +547,3 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
-<<<<<<< HEAD
-@media (prefers-color-scheme: dark) {
-  .banner-error {
-    background: #3a1a17;
-    color: #f5a397;
-    border-color: #6b2c24;
-  }
-
-  .banner-arrival {
-    background: #4a3b00;
-    color: #ffe27a;
-    border-color: #a67c00;
-  }
-
-  .accessibility-yes {
-    background: #123822;
-    border-color: #1f7a45;
-    color: #8be6ac;
-  }
-}
-=======
-
->>>>>>> 427d9c8f074a1a43e801c6162624d66cf4cd129b

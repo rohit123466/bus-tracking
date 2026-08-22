@@ -65,12 +65,9 @@ public class PassingBusService {
                             .destination(destination)
                             .distanceToStopMeters(distanceToStop)
                             .etaMinutes(EtaCalculator.estimateMinutes(distanceToStop, bus.getSpeedKmh()))
-<<<<<<< HEAD
                             .wheelchairAccessible(accessible)
                             .wheelchairSpaces(accessible ? wheelchairSpaces : 0)
-=======
                             .wheelchairSpaceAvailable(bus.getWheelchairSpaceAvailable())
->>>>>>> 427d9c8f074a1a43e801c6162624d66cf4cd129b
                             .build());
                 }
             }
