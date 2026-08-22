@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { speak } from '../utils/voiceAnnouncer';
 
 const PROGRESS_LABEL = {
   PASSED: 'Passed',
@@ -17,12 +16,11 @@ export default function StopProgressList({ stops }) {
   const currentStop = stops?.find((s) => s.progress === 'CURRENT') || null;
   const nextStop = stops?.find((s) => s.progress === 'NEXT') || null;
 
-  // Announce (voice + a visual banner) only on genuine changes to the
-  // tracked bus's current/next stop, not on every poll re-render.
+  // Announce (visual banner) only on genuine changes to the tracked bus's
+  // current/next stop, not on every poll re-render.
   useEffect(() => {
     if (currentStop && currentStop.stopId !== prevCurrentRef.current) {
       if (prevCurrentRef.current !== undefined) {
-        speak(`Now arriving: ${currentStop.name}`);
         setArrivalBanner(`🚏 Now arriving: ${currentStop.name}`);
         clearTimeout(bannerTimeoutRef.current);
         bannerTimeoutRef.current = setTimeout(() => setArrivalBanner(null), 8000);
@@ -34,9 +32,6 @@ export default function StopProgressList({ stops }) {
 
   useEffect(() => {
     if (nextStop && nextStop.stopId !== prevNextRef.current) {
-      if (prevNextRef.current !== undefined) {
-        speak(`Next stop: ${nextStop.name}`);
-      }
       prevNextRef.current = nextStop.stopId;
     }
   }, [nextStop]);

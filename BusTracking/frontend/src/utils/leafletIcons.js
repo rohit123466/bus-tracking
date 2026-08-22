@@ -50,6 +50,19 @@ export function stopIconFor(name) {
 // don't reallocate a divIcon on every position tick for every bus.
 const busIconCache = new Map();
 
+// Replay shows the full vehicle ID (much longer than a route code), so it
+// needs a pill sized to the text instead of the fixed-width route chip below.
+export function vehicleIdIcon(vehicleId) {
+  const label = String(vehicleId ?? '?');
+  const width = Math.max(32, label.length * 7 + 16);
+  return L.divIcon({
+    className: 'bus-marker',
+    html: `<div class="bus-chip" role="img" aria-label="Vehicle ${escapeHtml(label)}">${escapeHtml(label)}</div>`,
+    iconSize: [width, 20],
+    iconAnchor: [width / 2, 10],
+  });
+}
+
 export function busIcon(routeCode) {
   const key = routeCode ?? '?';
   let icon = busIconCache.get(key);
