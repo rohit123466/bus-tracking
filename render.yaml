@@ -9,7 +9,7 @@ services:
   - type: web
     name: bus-tracker-api
     runtime: docker
-    plan: starter
+    plan: free
     dockerfilePath: ./BusTracking/backend/Dockerfile
     dockerContext: ./BusTracking/backend
     healthCheckPath: /actuator/health
@@ -89,6 +89,6 @@ services:
 
 databases:
   - name: bus-tracker-db
-    plan: basic-256mb
+    plan: free
     databaseName: dtc_bus_tracker
     user: dtc_user

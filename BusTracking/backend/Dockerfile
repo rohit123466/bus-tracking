@@ -22,7 +22,7 @@ COPY --from=build /app/target/*.jar app.jar
 
 ENV SPRING_PROFILES_ACTIVE=prod
 # Size the heap from the container limit (Render instances are small).
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70"
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=65 -XX:+UseSerialGC"
 
 # Render injects PORT; application-prod.properties binds server.port to it.
 EXPOSE 8080
