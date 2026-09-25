@@ -1,0 +1,94 @@
+# Render Blueprint for the DTC Bus Tracker (lives at the repo root; the app is in BusTracking/).
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
+#
+# After the first deploy, fill in the three `sync: false` values marked below
+# (DTC_API_KEY, CORS_ALLOWED_ORIGINS, VITE_API_URL) - see BusTracking/DEPLOY.md.
+
+services:
+  # Spring Boot API + WebSocket
+  - type: web
+    name: bus-tracker-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./BusTracking/backend/Dockerfile
+    dockerContext: ./BusTracking/backend
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      # application-prod.properties reads the standard PG* vars.
+      - key: PGHOST
+        fromDatabase:
+          name: bus-tracker-db
+          property: host
+      - key: PGPORT
+        fromDatabase:
+          name: bus-tracker-db
+          property: port
+      - key: PGDATABASE
+        fromDatabase:
+          name: bus-tracker-db
+          property: database
+      - key: PGUSER
+        fromDatabase:
+          name: bus-tracker-db
+          property: user
+      - key: PGPASSWORD
+        fromDatabase:
+          name: bus-tracker-db
+          property: password
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: bus-tracker-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      # Delhi OTD realtime API key.
+      - key: DTC_API_KEY
+        sync: false
+      # Exact origin of the frontend, no trailing slash,
+      # e.g. https://bus-tracker-web.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # Import only North/North West Delhi (fits a 512MB instance). Set to 0 to
+      # import the full Delhi feed - needs a bigger plan and a much longer first boot.
+      - key: GTFS_IMPORT_RADIUS_DEGREES
+        value: "0.16"
+
+  # React + Vite frontend
+  - type: web
+    name: bus-tracker-web
+    runtime: static
+    rootDir: BusTracking/frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Public URL of the API including /api,
+      # e.g. https://bus-tracker-api.onrender.com/api (baked in at build time).
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      # SPA fallback for BrowserRouter deep links (/route/123, /admin, ...).
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+databases:
+  - name: bus-tracker-db
+    plan: basic-256mb
+    databaseName: dtc_bus_tracker
+    user: dtc_user
+
+# Render Key Value (Redis-compatible) for the live bus-position store.
+keyvalues:
+  - name: bus-tracker-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
