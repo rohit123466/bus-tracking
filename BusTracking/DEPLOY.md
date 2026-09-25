@@ -26,5 +26,8 @@
 
 - **GTFS.zip is stored in Git LFS.** The Docker build fails early if it only gets the LFS pointer. If Render doesn't fetch LFS for your repo, remove the LFS rule (`BusTracking/.gitattributes`) and re-commit the zip as a normal file (55 MB, under GitHub's 100 MB limit).
 - **Import area:** `GTFS_IMPORT_RADIUS_DEGREES=0.16` limits data to North/North West Delhi so it fits a 512 MB instance. Set it to `0` for the full Delhi feed - use a larger plan, and wipe the DB first, since the import is skipped once routes exist. The live-bus filter uses the same route set.
-- **Plans:** the API uses `starter` (always on, needed for the 10 s polling job). Free web services spin down when idle, which stops ingestion.
+- **Free plans:** everything in `render.yaml` uses Render's free tier (no card needed).
+  - The API sleeps after ~15 min without traffic; the first request afterwards takes ~1 min to wake it, and live-bus polling only runs while it is awake.
+  - Free Postgres is deleted after 30 days (create a new one, or upgrade, to keep the data). It holds 1 GB.
+  - For always-on, change the API plan to `starter` and the database to `basic-256mb`.
 - The `demo` profile (H2) is for local use only; Render runs `prod`.
