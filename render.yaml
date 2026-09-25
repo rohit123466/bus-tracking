@@ -80,15 +80,15 @@ services:
         source: /*
         destination: /index.html
 
+  # Render Key Value (Redis-compatible) for the live bus-position store.
+  - type: keyvalue
+    name: bus-tracker-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
 databases:
   - name: bus-tracker-db
     plan: basic-256mb
     databaseName: dtc_bus_tracker
     user: dtc_user
-
-# Render Key Value (Redis-compatible) for the live bus-position store.
-keyvalues:
-  - name: bus-tracker-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
-    ipAllowList: []
