@@ -1,24 +1,12 @@
 import { useEffect, useState } from 'react';
-import { adminLogin, clearAdminToken, getAdminStats, getAdminToken, setAdminToken } from '../api/client';
+import { Link } from 'react-router-dom';
+import { clearAdminToken, getAdminStats, getAdminToken } from '../api/client';
+import AdminLoginForm from '../components/AdminLoginForm';
 
 export default function AdminDashboardPage() {
   const [token, setToken] = useState(getAdminToken());
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsError, setStatsError] = useState(null);
-
-  const login = (e) => {
-    e.preventDefault();
-    setLoginError(null);
-    adminLogin(username, password)
-      .then((res) => {
-        setAdminToken(res.token);
-        setToken(res.token);
-      })
-      .catch((err) => setLoginError(err.response?.data?.message || 'Login failed.'));
-  };
 
   const logout = () => {
     clearAdminToken();
@@ -50,17 +38,7 @@ export default function AdminDashboardPage() {
   }, [token]);
 
   if (!token) {
-    return (
-      <div className="page-panel">
-        <h2>Admin Login</h2>
-        <form className="inline-form" onSubmit={login}>
-          <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
-          <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <button type="submit">Log in</button>
-        </form>
-        {loginError && <div className="banner banner-error" style={{ position: 'static', marginTop: 12 }}>{loginError}</div>}
-      </div>
-    );
+    return <AdminLoginForm onLoggedIn={setToken} />;
   }
 
   return (
@@ -69,6 +47,9 @@ export default function AdminDashboardPage() {
         <h2>Admin Dashboard</h2>
         <button onClick={logout}>Log out</button>
       </div>
+      <p>
+        Seat occupancy, ticket sales and camera monitoring: <Link to="/conductor">🧾 Conductor console</Link>
+      </p>
 
       {statsError && <div className="banner banner-error" style={{ position: 'static' }}>{statsError}</div>}
 

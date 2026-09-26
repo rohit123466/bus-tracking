@@ -9,6 +9,8 @@ import JourneyPlannerPage from './pages/JourneyPlannerPage';
 import ReplayPage from './pages/ReplayPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import AccessibilityPage from './pages/AccessibilityPage';
+import SeatAvailabilityPage from './pages/SeatAvailabilityPage';
+import ConductorPage from './pages/ConductorPage';
 import './App.css';
 
 function App() {
@@ -26,6 +28,8 @@ function App() {
             <Route path="/passing" element={<PassingNearMePage />} />
             <Route path="/journey" element={<JourneyPlannerPage />} />
             <Route path="/replay" element={<ReplayPage />} />
+            <Route path="/seats" element={<SeatAvailabilityPage />} />
+            <Route path="/conductor" element={<ConductorPage />} />
             <Route path="/admin" element={<AdminDashboardPage />} />
           </Routes>
         </div>

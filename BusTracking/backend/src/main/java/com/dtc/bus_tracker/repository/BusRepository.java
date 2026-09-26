@@ -11,4 +11,7 @@ import java.util.Optional;
 public interface BusRepository extends JpaRepository<Bus, Long> {
     Optional<Bus> findByVehicleId(String vehicleId);
     List<Bus> findByRouteId(Long routeId);
+
+    /** Buses with a seat layout, i.e. the ones taking part in seat-level ticketing. */
+    List<Bus> findByBusTypeIsNotNullOrderByVehicleIdAsc();
 }

@@ -9,7 +9,7 @@ const client = axios.create({ baseURL: API_BASE });
 const ADMIN_TOKEN_KEY = 'dtc_admin_token';
 
 client.interceptors.request.use((config) => {
-  if (config.url?.startsWith('/admin')) {
+  if (config.url?.startsWith('/admin') || config.url?.startsWith('/conductor')) {
     const token = localStorage.getItem(ADMIN_TOKEN_KEY);
     if (token) config.headers.Authorization = `Bearer ${token}`;
   }
@@ -96,5 +96,51 @@ export const adminLogin = (username, password) =>
   client.post('/auth/login', { username, password }).then((res) => res.data);
 
 export const getAdminStats = () => client.get('/admin/stats').then((res) => res.data);
+
+// --- Seat-level ticketing (public) ---
+export const getTicketingBuses = () => client.get('/ticketing/buses').then((res) => res.data);
+
+export const getSeatMap = (busNumber, { fromStopId, toStopId, category } = {}) =>
+  client
+    .get(`/ticketing/buses/${encodeURIComponent(busNumber)}/seats`, {
+      params: { fromStopId, toStopId, category },
+    })
+    .then((res) => res.data);
+
+// --- Conductor console (admin JWT) ---
+export const getPassengers = () => client.get('/conductor/passengers').then((res) => res.data);
+
+export const getBusTickets = (busNumber) =>
+  client.get(`/conductor/buses/${encodeURIComponent(busNumber)}/tickets`).then((res) => res.data);
+
+export const sellTicket = (request) => client.post('/conductor/tickets', request).then((res) => res.data);
+
+export const completeTicket = (ticketNumber, atStopId) =>
+  client
+    .post(`/conductor/tickets/${ticketNumber}/complete`, null, { params: atStopId ? { atStopId } : {} })
+    .then((res) => res.data);
+
+export const cancelTicket = (ticketNumber) =>
+  client.post(`/conductor/tickets/${ticketNumber}/cancel`).then((res) => res.data);
+
+export const advanceBus = (busNumber) =>
+  client.post(`/conductor/buses/${encodeURIComponent(busNumber)}/advance`).then((res) => res.data);
+
+export const getCameraReport = (busNumber) =>
+  client.get(`/conductor/buses/${encodeURIComponent(busNumber)}/camera`).then((res) => res.data);
+
+export const simulateCameraScan = (busNumber) =>
+  client.post(`/conductor/buses/${encodeURIComponent(busNumber)}/camera/scan`).then((res) => res.data);
+
+export const reportCameraObservations = (busNumber, observations, source = 'MANUAL') =>
+  client
+    .post(`/conductor/buses/${encodeURIComponent(busNumber)}/camera/observations`, { observations, source })
+    .then((res) => res.data);
+
+export const resetTicketingDemo = () => client.post('/conductor/demo/reset').then((res) => res.data);
+
+/** Backend error message for display ("Seat 05 is already occupied from B to C."). */
+export const apiErrorMessage = (err, fallback = 'Request failed.') =>
+  err?.response?.data?.message || (err?.response ? fallback : 'Cannot reach the server.');
 
 export default client;

@@ -50,4 +50,11 @@ public class Trip {
      */
     @Column(name = "wheelchair_accessible")
     private Boolean wheelchairAccessible;
+
+    /**
+     * stop_sequence of the stop the bus is at right now, advanced by the
+     * conductor. Only tracked for ticketing trips; null for GTFS-imported ones.
+     */
+    @Column(name = "current_stop_sequence")
+    private Integer currentStopSequence;
 }
