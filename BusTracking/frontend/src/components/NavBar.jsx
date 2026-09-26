@@ -9,6 +9,8 @@ const LINKS = [
   { to: '/passing', label: '⏱️ Passing' },
   { to: '/journey', label: '🧭 Planner' },
   { to: '/replay', label: '▶️ Replay' },
+  { to: '/seats', label: '🎟️ Seats' },
+  { to: '/conductor', label: '🧾 Conductor' },
   { to: '/admin', label: '⚙️ Admin' },
 ];
 

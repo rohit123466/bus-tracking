@@ -32,4 +32,13 @@ public class Bus {
 
     @Column(name = "wheelchair_accessible")
     private Boolean wheelchairAccessible;
+
+    /** Seat-layout family; null for live-feed buses without seat-level ticketing. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "bus_type")
+    private BusType busType;
+
+    /** Whether an occupancy camera is fitted. Boxed: ddl-auto=update leaves existing rows NULL. */
+    @Column(name = "camera_installed")
+    private Boolean cameraInstalled;
 }
