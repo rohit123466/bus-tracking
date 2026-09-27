@@ -1,4 +1,6 @@
 import './Ticketing.css';
+import './SeatMap.css';
+import { referenceSeatLayout } from '../utils/seatLayout.js';
 
 const STATUS_LABEL = {
   AVAILABLE: 'Available',
@@ -30,25 +32,41 @@ function seatTitle(seat) {
  */
 export default function SeatMap({ seatMap, selectedSeat, onSelect, badges = {}, highlight = {} }) {
   if (!seatMap) return null;
-  const { seats, layoutRows, layoutColumns } = seatMap;
+  const { seats } = seatMap;
+  const { positions, rows } = referenceSeatLayout(seats);
 
   return (
-    <div className="seatmap">
+    <div className="seatmap seatmap--reference">
       <div className="bus-shell" role="group" aria-label={`Seat map of bus ${seatMap.busNumber}`}>
-        <div className="bus-front">
-          <span className="bus-door" title="Front door (left side)">🚪 Door</span>
-          <span className="bus-front-label">Front of bus</span>
-          <span className="bus-driver" title="Driver (right-hand drive)">🧑‍✈️ Driver</span>
+        <div className="bus-cockpit">
+          <div className="bus-windscreen" aria-hidden="true" />
+          <span className="bus-front-label">FRONT</span>
+          <div className="bus-driver-station" aria-label="Driver seat, right-hand drive">
+            <svg viewBox="0 0 80 100" aria-hidden="true">
+              <rect x="8" y="2" width="64" height="18" rx="6" fill="#374151" />
+              <path d="M17 8h12m7 0h7m7 0h12" stroke="#94a3b8" strokeWidth="3" />
+              <circle cx="40" cy="34" r="17" fill="#fff" stroke="#374151" strokeWidth="5" />
+              <path d="M25 27l15 8 15-8M40 35v15" fill="none" stroke="#374151" strokeWidth="4" />
+              <rect x="17" y="57" width="46" height="32" rx="10" fill="#64748b" stroke="#334155" strokeWidth="3" />
+              <rect x="14" y="81" width="52" height="13" rx="6" fill="#334155" />
+              <path d="M11 64v15m58-15v15" stroke="#334155" strokeWidth="6" strokeLinecap="round" />
+            </svg>
+            <span>Driver seat</span>
+          </div>
         </div>
 
         <div
           className="seat-grid"
           style={{
-            gridTemplateColumns: `repeat(${layoutColumns}, minmax(0, 1fr))`,
-            gridTemplateRows: `repeat(${layoutRows}, auto)`,
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr)) minmax(26px, .85fr) repeat(2, minmax(0, 1fr))',
+            gridTemplateRows: `repeat(${rows}, minmax(44px, auto))`,
           }}
         >
+          <span className="bus-entry bus-entry--front" style={{ gridRow: 1, gridColumn: '1 / 3' }}>Front door</span>
+          <span className="bus-entry bus-entry--middle" style={{ gridRow: 5, gridColumn: '1 / 3' }}>Middle door</span>
+          <span className="bus-aisle-label" style={{ gridRow: '3 / 6', gridColumn: 3 }} aria-hidden="true">AISLE</span>
           {seats.map((seat) => {
+            const position = positions.get(seat.seatId);
             const wheelchair = seat.seatType === 'WHEELCHAIR';
             const free = seat.status !== 'OCCUPIED' && seat.status !== 'UNAVAILABLE';
             const locked = free && !seat.selectable;
@@ -70,8 +88,8 @@ export default function SeatMap({ seatMap, selectedSeat, onSelect, badges = {}, 
                 type="button"
                 className={classes}
                 style={{
-                  gridRow: `${seat.row + 1} / span ${seat.rowSpan}`,
-                  gridColumn: `${seat.column + 1} / span ${seat.columnSpan}`,
+                  gridRow: `${position.row + 1} / span ${position.rowSpan}`,
+                  gridColumn: `${position.column + 1} / span ${position.columnSpan}`,
                 }}
                 disabled={!onSelect || !seat.selectable}
                 aria-pressed={selected}
@@ -95,7 +113,7 @@ export default function SeatMap({ seatMap, selectedSeat, onSelect, badges = {}, 
             );
           })}
         </div>
-        <div className="bus-rear">Rear</div>
+        <div className="bus-rear">REAR</div>
       </div>
 
       <ul className="seat-legend" aria-label="Seat legend">
