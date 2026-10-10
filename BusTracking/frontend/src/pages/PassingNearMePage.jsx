@@ -70,7 +70,7 @@ export default function PassingNearMePage() {
               aria-label={
                 `Route ${b.routeCode}${b.routeName ? ` — ${b.routeName}` : ''}, ` +
                 `heading to ${b.destination || 'unknown destination'}, ` +
-                `near ${b.stopName}, ${Math.round(b.distanceToStopMeters)} meters away, ETA ${b.etaMinutes} minutes` +
+                `near ${b.stopName}, ${Math.round(b.distanceToStopMeters)} meters away, ETA ${b.etaMinutes == null ? "unavailable" : b.etaMinutes + " minutes"}` +
                 (b.wheelchairAccessible
                   ? `, wheelchair accessible with ${b.wheelchairSpaces} reserved space${b.wheelchairSpaces === 1 ? '' : 's'} for wheelchair users only`
                   : '')
@@ -85,7 +85,7 @@ export default function PassingNearMePage() {
               <td>{b.destination || '—'}</td>
               <td>{b.stopName}</td>
               <td>{Math.round(b.distanceToStopMeters)} m</td>
-              <td>{b.etaMinutes} min</td>
+              <td>{b.etaMinutes == null ? 'Unavailable' : `${b.etaMinutes} min`}</td>
             </tr>
           ))}
         </tbody>

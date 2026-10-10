@@ -144,3 +144,7 @@ export const apiErrorMessage = (err, fallback = 'Request failed.') =>
   err?.response?.data?.message || (err?.response ? fallback : 'Cannot reach the server.');
 
 export default client;
+
+// Full-feed rider API uses GTFS string IDs, not legacy database IDs.
+export const transitGet = (path, params = {}, signal) =>
+  client.get(`/transit${path}`, { params, signal, timeout: 90000 }).then(res => res.data);

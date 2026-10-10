@@ -81,8 +81,6 @@ public class BusLocationIngestService {
         bus.setStatus(BusStatus.ACTIVE);
         if (event.getWheelchairSpaceAvailable() != null) {
             bus.setWheelchairAccessible(event.getWheelchairSpaceAvailable());
-        } else if (bus.getWheelchairAccessible() != null) {
-            event.setWheelchairSpaceAvailable(bus.getWheelchairAccessible());
         }
 
         if (event.getRouteId() != null) {

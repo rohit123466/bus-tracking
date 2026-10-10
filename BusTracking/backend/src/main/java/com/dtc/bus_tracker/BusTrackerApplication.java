@@ -15,6 +15,7 @@ public class BusTrackerApplication {
         SpringApplication.run(BusTrackerApplication.class, args);
     }
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "gtfs.import.enabled", havingValue = "true", matchIfMissing = true)
     CommandLineRunner init(GtfsImportService gtfsImportService) {
         return args -> gtfsImportService.importAll();
     }

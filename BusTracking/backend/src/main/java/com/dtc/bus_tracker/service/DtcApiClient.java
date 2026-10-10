@@ -15,19 +15,25 @@ import java.util.List;
 @Service
 public class DtcApiClient {
 
+    private final com.dtc.bus_tracker.live.RealtimeSnapshot snapshot;
+    public DtcApiClient(com.dtc.bus_tracker.live.RealtimeSnapshot snapshot) { this.snapshot = snapshot; }
+    @Value("${dtc.trip-updates.url:}") private String tripUpdatesUrl;
+
     @Value("${dtc.api.url}")
     private String apiUrl;
 
     @Value("${dtc.api.key}")
     private String apiKey;
 
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(8)).build();
 
     public List<BusLocationEvent> fetchVehiclePositions() throws Exception {
-        String url = apiUrl + "?key=" + apiKey;
+        if (apiKey.isBlank() || apiKey.equals("YOUR_LOCAL_KEY")) { snapshot.feedError = "DTC_API_KEY is not configured; live positions are unavailable."; return List.of(); }
+        String url = apiUrl + (apiUrl.contains("?") ? "&" : "?") + "key=" + java.net.URLEncoder.encode(apiKey, java.nio.charset.StandardCharsets.UTF_8);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
+                .timeout(java.time.Duration.ofSeconds(12))
                 .GET()
                 .build();
 
@@ -38,15 +44,23 @@ public class DtcApiClient {
         }
 
         FeedMessage feed = FeedMessage.parseFrom(response.body());
+        snapshot.accept(feed, true, false);
+        if (!tripUpdatesUrl.isBlank()) {
+            try {
+                var updateRequest = HttpRequest.newBuilder(URI.create(tripUpdatesUrl)).timeout(java.time.Duration.ofSeconds(12)).GET().build();
+                var updates = httpClient.send(updateRequest, HttpResponse.BodyHandlers.ofByteArray());
+                if (updates.statusCode() == 200) snapshot.accept(FeedMessage.parseFrom(updates.body()), false, true);
+            } catch (Exception ignored) { /* existing predictions expire after 120s */ }
+        }
         List<BusLocationEvent> events = new ArrayList<>();
         for (var entity : feed.getEntityList()) {
             if (!entity.hasVehicle()) continue;
             var v = entity.getVehicle();
 
             String vehicleId = v.getVehicle().getId();
+            if (vehicleId.isBlank() || !v.hasPosition()) continue;
             var position = v.getPosition();
-            int hash = Math.abs(vehicleId.hashCode());
-            Boolean wheelchairSpaceAvailable = (hash % 10 < 6) ? Boolean.TRUE : (hash % 10 < 8 ? Boolean.FALSE : null);
+            Boolean wheelchairSpaceAvailable = null; // Occupancy is unknown unless the feed supplies it.
 
             events.add(BusLocationEvent.builder()
                     .vehicleId(vehicleId)

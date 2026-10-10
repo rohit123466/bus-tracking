@@ -49,6 +49,7 @@ export default function BusSearchPage() {
   return (
     <div className="page-panel">
       <h2>Search by Bus Number</h2>
+      <label><input type="checkbox" checked={wheelchairOnly} onChange={e => setWheelchairOnly(e.target.checked)} /> Wheelchair accessible only</label>
       <form
         className="inline-form"
         onSubmit={(e) => {

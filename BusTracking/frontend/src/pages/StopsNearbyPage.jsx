@@ -49,6 +49,7 @@ export default function StopsNearbyPage() {
   return (
     <div className="page-panel">
       <h2>Nearby Bus Stops</h2>
+      <label><input type="checkbox" checked={wheelchairOnly} onChange={e => setWheelchairOnly(e.target.checked)} /> Wheelchair accessible only</label>
       {error && <div className="banner banner-error" style={{ position: 'static' }}>{error}</div>}
 
       <div className="inline-form">
@@ -107,7 +108,7 @@ export default function StopsNearbyPage() {
                     <span>
                       Route {r.routeCode} {r.routeName ? `— ${r.routeName}` : ''}
                     </span>
-                    <span>{r.etaMinutes != null ? `${r.etaMinutes} min (${r.nextVehicleId})` : 'No live bus'}</span>
+                    <span>{r.etaMinutes != null ? `${r.etaMinutes} min (${r.nextVehicleId})` : r.nextVehicleId ? 'ETA unavailable' : 'No live bus'}</span>
                   </div>
                 ))}
               </div>

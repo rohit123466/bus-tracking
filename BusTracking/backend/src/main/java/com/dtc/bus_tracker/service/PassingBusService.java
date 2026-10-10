@@ -73,7 +73,7 @@ public class PassingBusService {
             }
         }
 
-        results.sort(Comparator.comparing(r -> r.getEtaMinutes()));
+        results.sort(Comparator.comparing(PassingBusResponse::getEtaMinutes, Comparator.nullsLast(Integer::compareTo)));
         return results.stream().limit(limit).toList();
     }
 }

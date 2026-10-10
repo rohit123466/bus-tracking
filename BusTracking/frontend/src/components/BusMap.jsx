@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, ZoomControl, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, ZoomControl, useMap } from 'react-leaflet';
 import { userIcon, stopIconFor, busIcon } from '../utils/leafletIcons';
 import WheelchairBadge from './WheelchairBadge';
 
@@ -19,7 +19,7 @@ function RecenterOnFirstFix({ userLocation }) {
   return null;
 }
 
-export default function BusMap({ userLocation, buses, selectedRoute, onSelectStop }) {
+export default function BusMap({ userLocation, buses, selectedRoute, onSelectStop, selectedStop, walkingRoute, routeMap }) {
   const busesAtStop = (stopName) => buses.filter((b) => b.stopName === stopName);
 
   // The API returns one row per (bus, nearby stop) pair - the same vehicle can
@@ -46,6 +46,13 @@ export default function BusMap({ userLocation, buses, selectedRoute, onSelectSto
         </Marker>
       )}
 
+      {userLocation?.accuracy && <Circle center={[userLocation.lat, userLocation.lng]} radius={userLocation.accuracy} pathOptions={{ color: "#3388ff", weight: 1 }} />}
+      {selectedStop && <Marker position={[selectedStop.lat, selectedStop.lng]} icon={stopIconFor(selectedStop.name)}><Popup>{selectedStop.name}</Popup></Marker>}
+      {walkingRoute?.available && <Polyline positions={walkingRoute.coordinates} pathOptions={{ color: "#16835b", weight: 5 }} />}
+
+      {routeMap?.shapes?.map((points, i) => <Polyline key={i} positions={points.map(p => [p.lat, p.lng])} pathOptions={{ color: "#aa3bff", weight: 3 }} />)}
+      {routeMap?.stops?.filter(s => s.id !== selectedStop?.id).map(s => <Marker key={s.id} position={[s.lat, s.lng]} icon={stopIconFor(s.name)} eventHandlers={{ click: () => onSelectStop?.(s) }}><Popup>{s.name}</Popup></Marker>)}
+
       {uniqueBuses.map((bus) => (
         <Marker
           key={bus.vehicleId}
@@ -62,6 +69,8 @@ export default function BusMap({ userLocation, buses, selectedRoute, onSelectSto
               <WheelchairBadge status={bus.wheelchairSpaceAvailable} showLabel={true} size="sm" />
             </div>
             Vehicle: {bus.vehicleId}
+            {bus.direction && <div>Direction: {bus.direction}</div>}
+            {bus.lastUpdatedEpochSeconds && <div>GPS: {new Date(bus.lastUpdatedEpochSeconds * 1000).toLocaleTimeString()}</div>}
             <br />
             ETA: {bus.etaMinutes != null ? `${bus.etaMinutes} min` : 'N/A'}
             <br />

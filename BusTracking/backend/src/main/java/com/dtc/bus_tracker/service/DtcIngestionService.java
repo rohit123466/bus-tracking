@@ -26,6 +26,8 @@ public class DtcIngestionService {
     private final DtcApiClient dtcApiClient;
     private final BusLocationPublisher publisher;
     private final RouteRepository routeRepository;
+    private Set<String> routeCodes = Set.of();
+    private long mappingsLoadedAt;
 
     public DtcIngestionService(DtcApiClient dtcApiClient, BusLocationPublisher publisher, RouteRepository routeRepository) {
         this.dtcApiClient = dtcApiClient;
@@ -33,18 +35,14 @@ public class DtcIngestionService {
         this.routeRepository = routeRepository;
     }
 
-    @Scheduled(fixedRateString = "${dtc.poll.interval:10000}")
+    @Scheduled(fixedDelayString = "${dtc.poll.interval:10000}")
     public void pollAndPublish() {
         try {
-            // Queried fresh each tick (cheap at this route count): a one-time
-            // cache would freeze on an empty set if this poll ever ran before
-            // GtfsImportService finished seeding routes at startup.
-            Set<String> routeCodes = routeRepository.findAll().stream()
-                    .map(r -> r.getRouteCode())
-                    .collect(Collectors.toSet());
-            if (routeCodes.isEmpty()) {
-                return; // GTFS import hasn't finished seeding routes yet
+            if (routeCodes.isEmpty() || System.currentTimeMillis() - mappingsLoadedAt > 300000) {
+                routeCodes = routeRepository.findAll().stream().map(r -> r.getRouteCode()).collect(Collectors.toSet());
+                mappingsLoadedAt = System.currentTimeMillis();
             }
+            // Fetch the full feed even while the legacy regional database is being seeded.
 
             List<BusLocationEvent> events = dtcApiClient.fetchVehiclePositions().stream()
                     .filter(e -> routeCodes.contains(e.getRouteId()))

@@ -23,3 +23,8 @@ Requires the backend running at `http://localhost:8080` (see
 
 See [BACKEND_NOTES.md](BACKEND_NOTES.md) for the original requirements doc
 and notes on backend API quirks (param names, missing endpoints, etc.).
+
+
+## Live transit upgrade
+
+Public route-number filtering, stop arrivals, destination-aware alternatives and pedestrian navigation are documented in [LIVE_TRANSIT.md](BusTracking/LIVE_TRANSIT.md), including API contracts, data limitations, environment variables, Windows setup and Maven troubleshooting.
