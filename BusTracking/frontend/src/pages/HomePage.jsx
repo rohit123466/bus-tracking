@@ -4,6 +4,7 @@ import SearchBar from '../components/SearchBar';
 import TransitStopPicker from '../components/TransitStopPicker';
 import { transitGet } from '../api/client';
 import useWalkingNavigation from '../hooks/useWalkingNavigation';
+import useUserLocation from '../hooks/useUserLocation';
 import { visibleBuses } from '../utils/navigation';
 import './LiveTransit.css';
 
@@ -22,7 +23,8 @@ export default function HomePage() {
     transitGet('/routes/map', { routeNumber }, controller.signal).then(r => { if (!controller.signal.aborted) setRouteMap(r); }).catch(() => {});
     return () => controller.abort();
   }, [routeNumber]);
-  const navigation = useWalkingNavigation(setStop);
+  const gps = useUserLocation();
+  const navigation = useWalkingNavigation(setStop, gps.location);
   useEffect(() => {
     const controller = new AbortController(); let timer;
     setData({ buses: [], warnings: [] });
@@ -61,6 +63,7 @@ export default function HomePage() {
   return <div className="live-transit">
     <aside className="transit-panel">
       <h2>DTC Live Routes</h2>
+      {gps.error && <p role="alert">{gps.error}</p>}
       <SearchBar publicRoutes onSelectRoute={r => { setRouteNumber(r.routeCode); setStop(null); }} />
       {routeNumber && <button onClick={() => setRouteNumber('')}>Clear route {routeNumber}</button>}
       <p role="status"><strong>{buses.length} active buses</strong>{routeNumber ? ` on route ${routeNumber}` : ' across mapped routes'}{updated && <small>Updated {updated.toLocaleTimeString()}</small>}</p>
@@ -79,7 +82,7 @@ export default function HomePage() {
           {a.reason && <small>{a.reason}</small>}
         </article>)}
       </section>}
-      {alternatives && <section><h3>Alternative journeys</h3><p>{alternatives.message}</p>
+      {alternatives && <section><h3>Alternative journeys</h3><p>{alternatives.message}</p>{alternatives.baselineMinutes != null && <p>Original journey: {Math.ceil(alternatives.baselineMinutes)} min</p>}
         {alternatives.options.map((o, i) => <article className="arrival-card" key={i}>
           <strong>{Math.ceil(o.totalMinutes)} min total</strong>
           <div>Walk {o.walkMinutes.toFixed(1)} · Wait {o.waitMinutes.toFixed(1)} · Ride {o.rideMinutes.toFixed(1)} · Transfer {o.transferMinutes.toFixed(1)} min</div>

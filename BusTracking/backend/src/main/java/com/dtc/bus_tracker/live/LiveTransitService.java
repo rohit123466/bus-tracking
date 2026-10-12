@@ -138,6 +138,7 @@ public class LiveTransitService {
     result.sort(Comparator.comparing(Arrival::etaMinutes, Comparator.nullsLast(Double::compareTo)));
     List<String> warnings = new ArrayList<>();
     if (index.warning != null) warnings.add(index.warning);
+    if (live.feedError != null) warnings.add(live.feedError);
     if (unresolved > 0)
       warnings.add(unresolved + " vehicles cannot be resolved to an unambiguous approaching trip.");
     return new Arrivals(result, warnings);

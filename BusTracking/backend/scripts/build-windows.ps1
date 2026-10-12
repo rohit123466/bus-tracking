@@ -5,9 +5,27 @@ param(
 $ErrorActionPreference = 'Stop'
 $backend = Split-Path $PSScriptRoot -Parent
 $java = if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin\java.exe' } else { 'java' }
-$version = (& $java -version 2>&1 | Out-String)
+# java -version writes to stderr. Reading it through Process avoids PowerShell 5.1
+# treating normal version output as a terminating NativeCommandError.
+$info = [System.Diagnostics.ProcessStartInfo]::new()
+$info.FileName = $java
+$info.Arguments = '-version'
+$info.UseShellExecute = $false
+$info.CreateNoWindow = $true
+$info.RedirectStandardError = $true
+$info.RedirectStandardOutput = $true
+$process = [System.Diagnostics.Process]::new()
+$process.StartInfo = $info
+try {
+    [void]$process.Start()
+    $version = $process.StandardError.ReadToEnd() + $process.StandardOutput.ReadToEnd()
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) { throw 'Unable to run Java. Check JAVA_HOME.' }
+} finally {
+    $process.Dispose()
+}
 if ($version -notmatch 'version "(\d+)') { throw 'Java not found. Install JDK 21 and set JAVA_HOME.' }
-if ([int]$Matches[1] -lt 21) { throw 'This project requires JDK 21 or newer. Set JAVA_HOME to JDK 21, then reopen PowerShell.' }
+if ([int]$Matches[1] -ne 21) { throw 'Use JDK 21 for this project. Set JAVA_HOME to JDK 21, then reopen PowerShell.' }
 $tempSettings = $null
 Push-Location $backend
 try {

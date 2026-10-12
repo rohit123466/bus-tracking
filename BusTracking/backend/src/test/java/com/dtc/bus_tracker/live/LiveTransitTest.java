@@ -204,4 +204,51 @@ class LiveTransitTest {
     assertEquals("ALTERNATIVES", result.status());
     assertEquals("600", result.options().get(0).legs().get(0).routeNumber());
   }
+
+  @Test void includesBothDirectionsButExcludesSuffixVariants() {
+    index.routes.put("down", new TransitIndex.Route("down", "534", "534DOWN", "DOWN", true));
+    index.routes.put("variant", new TransitIndex.Route("variant", "534A", "534AUP", "UP", true));
+    feed(vehicle("up", "1824", "", now, 28.6), vehicle("down", "down", "", now, 28.6),
+        vehicle("variant", "variant", "", now, 28.6));
+    assertEquals(Set.of("UP", "DOWN"), service.buses("534").buses().stream()
+        .map(LiveTransitService.Bus::direction).collect(java.util.stream.Collectors.toSet()));
+    assertEquals(2, service.buses("534").buses().size());
+  }
+
+  FeedEntity timedTrip(String vehicle, String trip, String first, int firstMinutes,
+      String last, int lastMinutes) {
+    var entity = update(vehicle, firstMinutes, lastMinutes).toBuilder();
+    entity.getTripUpdateBuilder().getTripBuilder().setTripId(trip);
+    entity.getTripUpdateBuilder().getStopTimeUpdateBuilder(0).setStopId(first);
+    entity.getTripUpdateBuilder().getStopTimeUpdateBuilder(1).setStopId(last);
+    return entity.build();
+  }
+
+  @Test void oneTransferAccountsForConnectionTimeAndRejectsMissedBus() {
+    index.stops.put("x", new TransitIndex.Stop("x", "Transfer", 28.6015, 77.2));
+    index.routes.put("a", new TransitIndex.Route("a", "600", "600UP", "UP", true));
+    index.routes.put("b", new TransitIndex.Route("b", "601", "601UP", "UP", true));
+    index.trips.put("ta", new TransitIndex.Trip("ta", "a", "0", "", List.of(
+        new TransitIndex.Visit("s", 1, 0, 0), new TransitIndex.Visit("x", 2, 0, 0))));
+    index.trips.put("tb", new TransitIndex.Trip("tb", "b", "0", "", List.of(
+        new TransitIndex.Visit("x", 1, 0, 0), new TransitIndex.Visit("d", 2, 0, 0))));
+    index.routesAtStop.put("s", Set.of("1824", "a"));
+    index.routesAtStop.put("x", Set.of("a", "b"));
+    index.routesAtStop.put("d", Set.of("1824", "b"));
+    feed(vehicle("base", "1824", "t", now, 28.6), update("base", 20, 50),
+        vehicle("first", "a", "ta", now, 28.6), timedTrip("first", "ta", "s", 3, "x", 10),
+        vehicle("second", "b", "tb", now, 28.6), timedTrip("second", "tb", "x", 15, "d", 25));
+    var alternatives = new AlternativeService(index, service, new WalkingService(index));
+    var result = alternatives.alternatives("s", "d", "534");
+    assertEquals("ALTERNATIVES", result.status());
+    var option = result.options().getFirst();
+    assertEquals(2, option.legs().size());
+    assertEquals(2, option.transferMinutes());
+    assertEquals(option.totalMinutes(), option.walkMinutes() + option.waitMinutes()
+        + option.rideMinutes() + option.transferMinutes(), .01);
+    feed(vehicle("base", "1824", "t", now, 28.6), update("base", 20, 50),
+        vehicle("first", "a", "ta", now, 28.6), timedTrip("first", "ta", "s", 3, "x", 10),
+        vehicle("second", "b", "tb", now, 28.6), timedTrip("second", "tb", "x", 11, "d", 21));
+    assertTrue(alternatives.alternatives("s", "d", "534").options().isEmpty());
+  }
 }

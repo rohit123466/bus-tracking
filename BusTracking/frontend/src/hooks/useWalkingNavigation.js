@@ -2,35 +2,34 @@ import { useEffect, useRef, useState } from 'react';
 import { transitGet } from '../api/client';
 import { progress, distance } from '../utils/navigation';
 
-export default function useWalkingNavigation(onStop) {
-  const [location, setLocation] = useState(null);
+export default function useWalkingNavigation(onStop, location) {
   const [walk, setWalk] = useState(null);
   const [active, setActive] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const watch = useRef(null), request = useRef(null), route = useRef(null), lastRoute = useRef(0), generation = useRef(0);
+  const request = useRef(null), route = useRef(null), lastRoute = useRef(0), generation = useRef(0);
   const callback = useRef(onStop);
   useEffect(() => { callback.current = onStop; }, [onStop]);
   const stop = () => {
     generation.current++;
-    if (watch.current !== null) navigator.geolocation?.clearWatch(watch.current);
-    watch.current = null; request.current?.abort(); request.current = null;
+    request.current?.abort(); request.current = null;
     setActive(false); setBusy(false);
   };
   useEffect(() => () => {
     generation.current++;
-    if (watch.current !== null) navigator.geolocation?.clearWatch(watch.current);
     request.current?.abort();
   }, []);
   const start = () => {
     stop(); setWalk(null); route.current = null; lastRoute.current = 0;
-    if (!navigator.geolocation) { setError('Geolocation is not supported by this browser.'); return; }
+    if (!location) { setError('Waiting for GPS. Allow location access before starting navigation.'); return; }
     setError(''); setActive(true);
+  };
+  useEffect(() => {
+    if (!active || !location) return;
     const version = generation.current;
-    const update = async position => {
+    const update = async () => {
       if (version !== generation.current) return;
-      const loc = { lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy, timestamp: position.timestamp };
-      setLocation(loc);
+      const loc = location;
       if (loc.accuracy > 50) { setError('GPS accuracy is low. Waiting for a fix within 50 metres before routing.'); return; }
       setError('');
       const current = route.current;
@@ -48,11 +47,8 @@ export default function useWalkingNavigation(onStop) {
       } catch (e) { if (!controller.signal.aborted) setError(e.response?.data?.message || 'Walking route unavailable. Please retry.'); }
       finally { if (request.current === controller) { request.current = null; setBusy(false); } }
     };
-    watch.current = navigator.geolocation.watchPosition(update, e => {
-      if (version !== generation.current) return;
-      setError(e.code === 1 ? 'GPS permission denied. Enable location permission to find a nearby stop.' : 'Unable to obtain GPS location. Please retry.'); stop();
-    }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 });
-  };
+    update();
+  }, [active, location]);
   const p = walk?.available && location ? progress(walk.coordinates, location) : null;
   const offRoute = p && p.offset > Math.max(35, (location?.accuracy || 0) * 2);
   const maneuver = p && !offRoute && location.accuracy <= 50 ? walk.maneuvers.find(m => m.toIndex > p.segment) : null;

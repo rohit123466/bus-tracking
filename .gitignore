@@ -1,0 +1,9 @@
+*.log
+*.pid
+.env
+.env.local
+.env.*.local
+node_modules/
+target/
+dist/
+data/

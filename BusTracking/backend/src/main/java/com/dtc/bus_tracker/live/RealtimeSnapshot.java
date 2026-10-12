@@ -140,7 +140,8 @@ public class RealtimeSnapshot {
     if (updateVehicles) {
       vehicles = Map.copyOf(next);
       fetchedAt = Instant.now().getEpochSecond();
-      feedError = null;
+      feedError = !next.isEmpty() && next.values().stream().noneMatch(v -> fresh(v.timestamp()))
+          ? "DTC feed contains no fresh vehicle positions." : null;
     }
     if (updateTrips || hasUpdates) {
       predictions = Map.copyOf(times);
