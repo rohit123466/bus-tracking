@@ -16,7 +16,8 @@ function RecenterOnFirstFix({ userLocation }) {
     }
   }, [userLocation, map]);
 
-  return null;
+  return <button type="button" disabled={!userLocation} onClick={() => map.setView([userLocation.lat, userLocation.lng], 16)}
+    style={{ position: 'absolute', top: 12, right: 12, zIndex: 1000 }}>Center on My Location</button>;
 }
 
 export default function BusMap({ userLocation, buses, selectedRoute, onSelectStop, selectedStop, walkingRoute, routeMap }) {

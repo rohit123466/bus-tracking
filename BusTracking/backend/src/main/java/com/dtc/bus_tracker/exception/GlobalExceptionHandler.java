@@ -65,10 +65,16 @@ public class GlobalExceptionHandler {
                 "Invalid value '" + ex.getValue() + "' for parameter '" + ex.getName() + "'.");
     }
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleResponseStatus(org.springframework.web.server.ResponseStatusException ex) {
+        var status = HttpStatus.valueOf(ex.getStatusCode().value());
+        return errorBody(status, status.getReasonPhrase(), ex.getReason());
+    }
+
     @ExceptionHandler(RuntimeException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException ex) {
-        return errorBody(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage());
+        return errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", "An unexpected server error occurred.");
     }
 
     private ResponseEntity<Map<String, Object>> errorBody(HttpStatus status, String error, String message) {
@@ -83,6 +89,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
-        return errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", ex.getMessage());
+        return errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", "An unexpected server error occurred.");
     }
 }

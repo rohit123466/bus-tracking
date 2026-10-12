@@ -18,7 +18,7 @@
 		<java.version>21</java.version>
 		<protobuf.version>4.34.2</protobuf.version>
 		<opencsv.version>5.9</opencsv.version>
-		<gtfs.version>0.0.8</gtfs.version>
+		<gtfs.version>0.2.0</gtfs.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<jjwt.version>0.12.6</jjwt.version>
 		<springdoc.version>3.1.1</springdoc.version>
