@@ -27,7 +27,7 @@ try {
   const rejected=await page.request.get(api+'/api/transit/routes/search',{headers:{Origin:'https://untrusted.invalid'}});
   assert.equal(rejected.status(),403);
   await page.goto('http://localhost:5173');
-  await page.getByText(/GPS accuracy/).waitFor();
+  await page.getByText(/Location updated/).waitFor();
   await page.getByRole('button',{name:'Center on My Location'}).click();
   const routeResponse=page.waitForResponse(r=>r.url().includes('/buses/live?routeNumber=534'));
   const input=page.getByRole('textbox',{name:'Public route number'});

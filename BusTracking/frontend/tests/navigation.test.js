@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { visibleBuses, progress } from '../src/utils/navigation.js';
+import { visibleBuses, progress, nearbyBuses } from '../src/utils/navigation.js';
 const bus = (id, route = '534', stamp = 1000) => ({ vehicleId: id, routeCode: route, lastUpdatedEpochSeconds: stamp, busLatitude: 28.6, busLongitude: 77.2 });
 test('534 matches exactly, keeps distinct vehicles and deduplicates repeated IDs', () => {
  assert.deepEqual(visibleBuses([bus('a'),bus('b'),bus('a'),bus('c','534E'),bus('d','221')],'534',1001).map(b=>b.vehicleId),['a','b']);
@@ -25,4 +25,14 @@ test('remaining walking distance decreases along route and detects deviation', (
  const middle=progress(route,{lat:28.601,lng:77.201});
  assert.ok(start.remaining>middle.remaining);assert.ok(middle.offset<1);
  assert.ok(progress(route,{lat:28.603,lng:77.205}).offset>100);
+});
+
+test('nearby vehicles use user GPS, radius, freshness and distance ordering', () => {
+ const location = {lat:28.6,lng:77.2,timestamp:1001000};
+ const rows = [{...bus('far'),busLatitude:28.7}, {...bus('near'),busLatitude:28.602}, bus('here'), bus('stale','534',700)];
+ assert.deepEqual(nearbyBuses(rows,location,500,1001000).map(b=>b.vehicleId),['here','near']);
+ assert.deepEqual(nearbyBuses(rows,{...location,lat:28.7},500,1001000).map(b=>b.vehicleId),['far']);
+ assert.deepEqual(nearbyBuses(rows,null,500,1001000),[]);
+ assert.deepEqual(nearbyBuses(rows,location,500,1032000),[]);
+ assert.equal(nearbyBuses(rows,location,15000,1001000).length,3);
 });

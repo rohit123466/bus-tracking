@@ -5,7 +5,7 @@ try {
  const context = await browser.newContext({permissions:['geolocation'],geolocation:{latitude:28.6139,longitude:77.209,accuracy:10}});
  const page = await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://localhost:5173');
- await page.getByText(/GPS accuracy/).waitFor();
+ await page.getByText(/Location updated/).waitFor();
  await page.getByRole('button',{name:'Center on My Location'}).click();
  await page.waitForResponse(r=>r.url().includes('/buses/live') && r.status()===200);
  const live=await (await page.request.get('http://localhost:8080/api/transit/buses/live')).json();

@@ -25,3 +25,15 @@ export function visibleBuses(buses, routeNumber, now = Date.now() / 1000) {
     b.lastUpdatedEpochSeconds > 0 && now - b.lastUpdatedEpochSeconds <= 120 && now - b.lastUpdatedEpochSeconds >= -30)
     .map(b => [b.vehicleId, b])).values()];
 }
+
+// Proximity is measured from the browser fix to the vehicle, never to a route's stops.
+export function nearbyBuses(buses, location, radiusMeters, now = Date.now()) {
+  if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)
+    || Math.abs(location.lat) > 90 || Math.abs(location.lng) > 180
+    || !Number.isFinite(location.timestamp) || now - location.timestamp > 30000
+    || now - location.timestamp < -30000 || !Number.isFinite(radiusMeters) || radiusMeters <= 0) return [];
+  return visibleBuses(buses, '', now / 1000)
+    .map(bus => ({ ...bus, distanceToUser: distance(location, { lat: bus.busLatitude, lng: bus.busLongitude }) }))
+    .filter(bus => bus.distanceToUser <= radiusMeters)
+    .sort((a, b) => a.distanceToUser - b.distanceToUser);
+}

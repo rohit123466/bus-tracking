@@ -36,7 +36,7 @@ export default function useWalkingNavigation(onStop, location) {
       if (version !== generation.current) return;
       const loc = location;
       const accurate = loc.accuracy <= 50 && Date.now() - loc.timestamp <= 30000;
-      setError(previous => accurate ? (previous.startsWith('Location is approximate') || previous.startsWith('Waiting for GPS') ? '' : previous) : 'Location is approximate or outdated. Nearby stops are provisional; walking guidance needs a recent GPS fix within 50 metres.');
+      setError(previous => accurate ? (previous.startsWith('Location is approximate') || previous.startsWith('Waiting for GPS') ? '' : previous) : 'Location is approximate or outdated. Nearby stops are provisional; walking guidance is waiting for a reliable location update.');
       const current = route.current;
       const p = current?.available ? progress(current.coordinates, loc) : null;
       const offRoute = p && p.offset > Math.max(35, loc.accuracy * 2);

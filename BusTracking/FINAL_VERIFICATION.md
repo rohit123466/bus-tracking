@@ -2,7 +2,7 @@
 
 Date: 2026-10-13 (Asia/Calcutta). Base: `main` at `aa7e3eaf029ebd60303556d414d52cc279e88903` (merged PR #21). Branch: `fix/complete-dtc-live-tracking`.
 
-**Overall: PARTIAL — local implementation and verification completed; authenticated real DTC integration and production deployment are not verified.** Fixture predictions, browser GPS and ticket occupancy are not evidence of real-world transit accuracy.
+**Overall: PARTIAL — local implementation and verification completed; authenticated DTC ingestion is verified in the follow-up below; real arrival accuracy and production deployment remain unverified.** Fixture predictions, browser GPS and ticket occupancy are not evidence of real-world transit accuracy.
 
 ## Status definitions
 
@@ -165,3 +165,15 @@ See the exact list appended below (paths relative to repository root).
 - Verification: frontend lint/build passed; 11 existing mock browser scenarios passed; tests/walking-fallback.mjs passed against the running backend with simulated delayed/coarse GPS.
 - BLOCKED: street-level pedestrian directions require ORS_API_KEY. The supplied DTC credential is active only in the running backend environment and was not changed or committed.
 
+
+### Nearby vehicle follow-up
+- COMPLETE: homepage defaults to buses within 2 km of browser location, with a 500 m–10 km selector and an all-bus toggle. Distances measure user-to-vehicle proximity and sort nearest first; movement updates results. Stale user fixes and stale vehicle positions are excluded. GPS accuracy text is hidden at the user's request; internal safety checks remain.
+- COMPLETE: 7 frontend unit tests, lint and build passed; 11 existing mock browser scenarios and the new nearby-buses.mjs moving-GPS/radius scenario passed.
+- PARTIAL: authenticated live API returned 319 verified mapped vehicles at the follow-up check; 1063 mapping conflicts and 406 stale/undated vehicles were excluded. Counts fluctuate. Browser proximity verification uses simulated GPS and vehicles, not the user's physical position. The earlier missing-DTC-key result above is historical and superseded by successful authenticated ingestion; ORS and compatible static-data limitations remain.
+- PR: https://github.com/rohit123466/bus-tracking/pull/23
+
+### Freshness and actual browser validation
+- COMPLETE: inspected the user browser and confirmed a real nearby vehicle with a recent report. A subsequent independent live API/filter check also returned a nearby vehicle, and later browser observation showed its distance changing. No user coordinates are recorded in this report.
+- COMPLETE: periodically request a fresh browser location every 15 seconds because stationary devices may not emit watch events. Requests do not overlap, timestamps are never fabricated, and timer/watch cleanup occurs on unmount.
+- COMPLETE: replace ambiguous active-bus wording with recently reported buses and show per-vehicle GPS report age. Keep the existing 120-second vehicle cutoff, exact-route matching and coordinate validation. Freshness is not proof of passenger service.
+- Validation: 7 unit tests, lint, build, 11 mock browser scenarios and nearby radius/movement browser checks passed. Authenticated data still has substantial static mapping gaps, explicitly disclosed to the user; no uncertain routes were assigned.
