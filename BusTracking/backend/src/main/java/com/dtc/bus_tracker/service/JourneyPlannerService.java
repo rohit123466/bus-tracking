@@ -21,10 +21,16 @@ import java.util.List;
  * This is graph-search over stop sequences, not a full time-expanded transit
  * router (no schedule-adherence or multi-transfer search) - a reasonable
  * scope for the stop/route data this project has.
+ *
+ * <p>Three journey preferences are supported via {@link JourneyPreference}:
+ * FASTEST (default), FEWEST_TRANSFERS, and MINIMUM_WALKING.
  */
 @Service
 @RequiredArgsConstructor
 public class JourneyPlannerService {
+
+    /** Sorting preference for journey options. */
+    public enum JourneyPreference { FASTEST, FEWEST_TRANSFERS, MINIMUM_WALKING }
 
     private static final double WALK_SPEED_KMH = 5.0;
     private static final double BUS_SPEED_KMH = 20.0;
@@ -35,7 +41,13 @@ public class JourneyPlannerService {
     private final StopRepository stopRepository;
     private final RouteStopSequenceService routeStopSequenceService;
 
+    /** Backwards-compatible overload — defaults to FASTEST preference. */
     public JourneyPlanResponse plan(double srcLat, double srcLng, double dstLat, double dstLng) {
+        return plan(srcLat, srcLng, dstLat, dstLng, JourneyPreference.FASTEST);
+    }
+
+    public JourneyPlanResponse plan(double srcLat, double srcLng, double dstLat, double dstLng,
+                                    JourneyPreference preference) {
         List<Stop> boardingCandidates = nearestStops(srcLat, srcLng);
         List<Stop> alightingCandidates = nearestStops(dstLat, dstLng);
 
@@ -44,7 +56,16 @@ public class JourneyPlannerService {
             options = findTransferOptions(srcLat, srcLng, dstLat, dstLng, boardingCandidates, alightingCandidates);
         }
 
-        options.sort(Comparator.comparingInt(o -> o.getTotalMinutes()));
+        // Sort by the requested preference, then by totalMinutes as a tiebreaker.
+        Comparator<JourneyOption> comparator = switch (preference) {
+            case FEWEST_TRANSFERS -> Comparator.comparingInt((JourneyOption o) -> o.getLegs().size())
+                    .thenComparingInt(JourneyOption::getTotalMinutes);
+            case MINIMUM_WALKING -> Comparator.comparingDouble(
+                    (JourneyOption o) -> o.getWalkToBoardMeters() + o.getWalkFromAlightMeters())
+                    .thenComparingInt(JourneyOption::getTotalMinutes);
+            default -> Comparator.comparingInt(JourneyOption::getTotalMinutes);
+        };
+        options.sort(comparator);
         return JourneyPlanResponse.builder()
                 .options(options.stream().limit(MAX_OPTIONS).toList())
                 .build();

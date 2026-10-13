@@ -6,7 +6,7 @@ import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 class TransitErrorTest {
     @Test void invalidCoordinatesKeepTheirBadRequestStatus() {
-        var controller = new TransitController(null, null, null, null);
+        var controller = new TransitController(null, null, null, null, null);
         var exception = assertThrows(ResponseStatusException.class, () -> controller.nearest(999, 77));
         var response = new GlobalExceptionHandler().handleResponseStatus(exception);
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());

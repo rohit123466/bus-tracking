@@ -48,6 +48,11 @@ public class RealtimeSnapshot {
     return cancelled.contains(tripId);
   }
 
+  /** Returns the current set of cancelled trip IDs from the latest TripUpdates feed. */
+  public Set<String> cancelledTrips() {
+    return cancelled;
+  }
+
   public static boolean fresh(long stamp) {
     long age = Instant.now().getEpochSecond() - stamp;
     return stamp > 0 && age >= -30 && age <= 120;
