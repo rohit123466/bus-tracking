@@ -2,7 +2,7 @@ import './Ticketing.css';
 
 const WHEELCHAIR_LABEL = { AVAILABLE: 'Free', OCCUPIED: 'Occupied', NOT_FITTED: 'Not fitted' };
 
-/** Real-time occupancy of one bus; every number comes from the backend summary. */
+/** Ticket-derived demo occupancy, separate from verified live DTC tracking. */
 export default function OccupancyDashboard({ bus }) {
   if (!bus) return null;
   const kpis = [
@@ -26,6 +26,7 @@ export default function OccupancyDashboard({ bus }) {
 
   return (
     <section className="t-card">
+      <p className="muted small">Demo ticket occupancy — not verified live DTC seat availability.</p>
       <div className="t-card-row">
         <h3 className="t-card-title">
           📊 {bus.busNumber} <span className="muted">· {bus.busTypeLabel} · {bus.routeCode}</span>

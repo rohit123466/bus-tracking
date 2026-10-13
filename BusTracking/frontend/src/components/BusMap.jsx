@@ -70,8 +70,10 @@ export default function BusMap({ userLocation, buses, selectedRoute, onSelectSto
               <WheelchairBadge status={bus.wheelchairSpaceAvailable} showLabel={true} size="sm" />
             </div>
             Vehicle: {bus.vehicleId}
+            <div>Position: {bus.busLatitude.toFixed(5)}, {bus.busLongitude.toFixed(5)}</div>
             {bus.direction && <div>Direction: {bus.direction}</div>}
             {bus.lastUpdatedEpochSeconds && <div>GPS: {new Date(bus.lastUpdatedEpochSeconds * 1000).toLocaleTimeString()}</div>}
+            {bus.lastUpdatedEpochSeconds && <div>Fix age: {Math.max(0, Math.floor(Date.now() / 1000 - bus.lastUpdatedEpochSeconds))} seconds</div>}
             <br />
             ETA: {bus.etaMinutes != null ? `${bus.etaMinutes} min` : 'N/A'}
             <br />

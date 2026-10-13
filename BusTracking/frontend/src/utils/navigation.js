@@ -21,6 +21,7 @@ export function progress(coordinates, location) {
 export function visibleBuses(buses, routeNumber, now = Date.now() / 1000) {
   return [...new Map(buses.filter(b => b.vehicleId && (!routeNumber || b.routeCode === routeNumber) &&
     Number.isFinite(b.busLatitude) && Number.isFinite(b.busLongitude) &&
+    Math.abs(b.busLatitude) <= 90 && Math.abs(b.busLongitude) <= 180 &&
     b.lastUpdatedEpochSeconds > 0 && now - b.lastUpdatedEpochSeconds <= 120 && now - b.lastUpdatedEpochSeconds >= -30)
     .map(b => [b.vehicleId, b])).values()];
 }

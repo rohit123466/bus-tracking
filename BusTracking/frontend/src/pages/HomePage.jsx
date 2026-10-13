@@ -16,6 +16,11 @@ export default function HomePage() {
   const [alternatives, setAlternatives] = useState(null);
   const [error, setError] = useState(''), [updated, setUpdated] = useState(null);
   const [routeMap, setRouteMap] = useState(null);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   useEffect(() => {
     setRouteMap(null);
     if (!routeNumber) return;
@@ -58,8 +63,9 @@ export default function HomePage() {
     };
     poll(); return () => { controller.abort(); clearTimeout(timer); };
   }, [stop, destination, routeNumber]);
-  const buses = useMemo(() => visibleBuses(data.buses, routeNumber), [data, routeNumber]);
-  const displayedArrivals = arrivals.arrivals.filter(a => !routeNumber || a.routeNumber === routeNumber);
+  const buses = useMemo(() => visibleBuses(data.buses, routeNumber, now / 1000), [data, routeNumber, now]);
+  const displayedArrivals = arrivals.arrivals.filter(a => (!routeNumber || a.routeNumber === routeNumber)
+    && now / 1000 - a.lastGpsUpdate <= 120 && now / 1000 - a.lastGpsUpdate >= -30);
   return <div className="live-transit">
     <aside className="transit-panel">
       <h2>DTC Live Routes</h2>
@@ -77,7 +83,8 @@ export default function HomePage() {
         {!displayedArrivals.length && <p>No verified approaching vehicles available.</p>}
         {displayedArrivals.map(a => <article className="arrival-card" key={`${a.vehicleId}-${a.tripId}`}>
           <strong>{a.routeNumber} · {a.vehicleId}</strong>
-          <div>{a.etaMinutes == null ? 'ETA unavailable' : `${Math.ceil(a.etaMinutes)} min`} · {a.distanceMeters == null ? 'Route distance unavailable' : `${Math.round(a.distanceMeters)} m along route`}</div>
+          <div>{a.etaMinutes == null ? 'ETA unavailable' : `${Math.ceil(a.etaMinutes)} min`} · {a.distanceMeters == null ? 'Route distance unavailable' : `${(a.distanceMeters / 1000).toFixed(2)} km along route`}</div>
+          <small>{a.direction || 'Direction unknown'}{Number.isFinite(a.busLatitude) && Number.isFinite(a.busLongitude) && ` · Position ${a.busLatitude.toFixed(5)}, ${a.busLongitude.toFixed(5)}`}</small>
           <small>{a.predictionAvailability} · GPS {new Date(a.lastGpsUpdate * 1000).toLocaleTimeString()}</small>
           {a.reason && <small>{a.reason}</small>}
         </article>)}
@@ -85,8 +92,10 @@ export default function HomePage() {
       {alternatives && <section><h3>Alternative journeys</h3><p>{alternatives.message}</p>{alternatives.baselineMinutes != null && <p>Original journey: {Math.ceil(alternatives.baselineMinutes)} min</p>}
         {alternatives.options.map((o, i) => <article className="arrival-card" key={i}>
           <strong>{Math.ceil(o.totalMinutes)} min total</strong>
+          {alternatives.baselineMinutes != null && <small>Estimated saving: {Math.floor(alternatives.baselineMinutes - o.totalMinutes)} min</small>}
+          {o.walkingDistanceMeters != null && <small>Walk {(o.walkingDistanceMeters / 1000).toFixed(2)} km from the selected boarding stop</small>}
           <div>Walk {o.walkMinutes.toFixed(1)} · Wait {o.waitMinutes.toFixed(1)} · Ride {o.rideMinutes.toFixed(1)} · Transfer {o.transferMinutes.toFixed(1)} min</div>
-          {o.legs.map(l => <small key={l.vehicleId}>Route {l.routeNumber}: stop {l.boardStopId} → {l.alightStopId}</small>)}
+          {o.legs.map(l => <small key={l.vehicleId}>Route {l.routeNumber}: {l.boardStopName || l.boardStopId} → {l.alightStopName || l.alightStopId}</small>)}
         </article>)}
       </section>}
       <section><h3>Walk to a bus stop</h3>

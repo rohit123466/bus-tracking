@@ -42,9 +42,10 @@ export default function SeatAvailabilityPage() {
     <div className="page-panel page-panel-wide ticketing-page">
       <header className="ticketing-hero">
         <div>
-          <span className="hero-kicker">🎟️ Live seat availability</span>
+          <span className="hero-kicker">🎟️ Demo seat availability</span>
           <h2>Pick your stops, see your seat</h2>
           <p>
+            Demo ticket and seat data — not verified live DTC occupancy.{' '}
             Seats are shown for <em>your</em> part of the route: a seat taken from A to C is free again from C
             onwards. Tickets are issued by the conductor on board.
           </p>

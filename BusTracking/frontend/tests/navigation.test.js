@@ -11,6 +11,14 @@ test('route filtering survives replacement polling payloads', () => {
 test('empty and stale positions are excluded', () => {
  assert.deepEqual(visibleBuses([bus('a','221'),bus('b','534',700)],'534',1001),[]);
 });
+test('invalid coordinate ranges and future fixes are excluded', () => {
+ assert.deepEqual(visibleBuses([{...bus('a'),busLatitude:91},{...bus('b'),busLongitude:181},bus('c','534',1040)],'534',1000),[]);
+});
+test('vehicles expire even when the last polling payload has not changed', () => {
+ const rows=[bus('a')];
+ assert.equal(visibleBuses(rows,'534',1120).length,1);
+ assert.equal(visibleBuses(rows,'534',1121).length,0);
+});
 test('remaining walking distance decreases along route and detects deviation', () => {
  const route=[[28.6,77.2],[28.601,77.2],[28.601,77.202]];
  const start=progress(route,{lat:28.6,lng:77.2});

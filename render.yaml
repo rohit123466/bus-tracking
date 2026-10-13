@@ -12,7 +12,7 @@ services:
     plan: free
     dockerfilePath: ./BusTracking/backend/Dockerfile
     dockerContext: ./BusTracking/backend
-    healthCheckPath: /actuator/health
+    healthCheckPath: /actuator/health/readiness
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
@@ -55,7 +55,8 @@ services:
       # e.g. https://bus-tracker-web.onrender.com
       - key: CORS_ALLOWED_ORIGINS
         sync: false
-      # Import only North/North West Delhi (fits a 512MB instance). Set to 0 to
+      # Limit the relational import to North/North West Delhi. The separate full
+      # live index still needs a measured memory budget; 512MB is not guaranteed. Set to 0 to
       # import the full Delhi feed - needs a bigger plan and a much longer first boot.
       - key: GTFS_IMPORT_RADIUS_DEGREES
         value: "0.16"

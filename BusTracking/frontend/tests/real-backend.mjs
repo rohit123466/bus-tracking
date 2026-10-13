@@ -16,5 +16,5 @@ try {
  await page.getByRole('button',{name:'Find Nearest Bus Stop'}).click();
  await page.getByText(/straight-line distance only/).first().waitFor();
  await page.screenshot({path:process.env.SCREENSHOT_PATH,fullPage:true});
- assert.deepEqual(errors,[]);console.log('Real backend browser flow passed; browser GPS simulated, DTC data real.');
+ assert.deepEqual(errors,[]);console.log('Actual backend browser flow passed; browser GPS simulated. Live feed availability is reported above, not assumed.');
 } finally {await browser.close();}
