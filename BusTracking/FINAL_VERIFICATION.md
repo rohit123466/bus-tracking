@@ -118,7 +118,7 @@ With actual demo backend/frontend running, use a third window to run `npm run te
 
 ## Pull request
 
-PR URL: pending creation. Base `main`; feature branch only. No force push or merge.
+PR URL: https://github.com/rohit123466/bus-tracking/pull/23 . Base `main`; feature branch only. No force push or merge.
 
 ## Files modified
 

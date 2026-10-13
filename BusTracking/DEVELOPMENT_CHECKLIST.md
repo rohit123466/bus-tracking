@@ -12,6 +12,6 @@ Baseline: main aa7e3eaf (merged PR #21); PR #19 preserves the vertical seat layo
 - [x] Run actual demo backend/frontend and browser automation, including accessibility/ticketing/admin.
 - [x] Check official DTC feed availability and document external limitations without invented predictions.
 - [x] Review Render, health, CORS, WebSocket, secrets and restart behavior.
-- [ ] Write FINAL_VERIFICATION.md with executed results, commit, push and open PR to main.
+- [x] Write FINAL_VERIFICATION.md with executed results, commit, push and open PR #23 to main.
 
 Existing implementations to preserve: exact public-route matching; both route directions; nonoverlapping polling; GTFS shapes and absolute TripUpdates; conservative direct/one-transfer comparisons; GPS watcher and recenter; ORS fallback; vertical wheelchair/seat layout; ticketing and protected admin APIs.
