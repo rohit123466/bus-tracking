@@ -178,6 +178,7 @@ export default function BusMap({
               {bus.routeName && <div style={{ fontSize: 12, marginBottom: 3 }}>{bus.routeName}</div>}
 
               <div><strong>Vehicle:</strong> {bus.vehicleId}</div>
+              {bus.routeId && <div><strong>Official GTFS route ID:</strong> {bus.routeId}</div>}
               {bus.direction && <div><strong>Direction:</strong> {bus.direction}</div>}
 
               {/* Speed */}
