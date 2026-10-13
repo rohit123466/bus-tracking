@@ -12,7 +12,7 @@
  * - Notifications require explicit browser permission (we ask only when the
  *   user opts in, never automatically).
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 const SUPPORTED = typeof window !== 'undefined' && 'Notification' in window;
 

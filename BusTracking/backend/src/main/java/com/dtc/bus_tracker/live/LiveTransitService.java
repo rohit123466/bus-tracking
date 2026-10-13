@@ -100,6 +100,17 @@ public class LiveTransitService {
     return index.routes.get(trip != null ? trip.routeId() : v.routeId());
   }
 
+  /** Returns the current live vehicle snapshot (unfiltered). */
+  public Collection<RealtimeSnapshot.Vehicle> liveVehicles() {
+    return live.vehicles().values();
+  }
+
+  /** Returns true when the realtime feed has been received and is not stale. */
+  public boolean feedAvailable() {
+    return live.feedError == null
+        && !(live.fetchedAt > 0 && Instant.now().getEpochSecond() - live.fetchedAt > 120);
+  }
+
   public LiveResult buses(String number) {
     String query = number == null ? "" : number.trim().toUpperCase(Locale.ROOT);
 

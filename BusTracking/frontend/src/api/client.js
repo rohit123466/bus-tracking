@@ -153,6 +153,10 @@ export const transitGet = (path, params = {}, signal) =>
 export const getNearbyLiveBuses = (lat, lng, radiusMeters = 2000, routeNumber = '') =>
   transitGet('/buses/nearby', { latitude: lat, longitude: lng, radiusMeters, routeNumber });
 
+/** GET /api/transit/stops/nearby — enriched nearest bus stands with routes + live count */
+export const getNearbyGtfsStops = (lat, lng, radiusMeters = 1000, limit = 5) =>
+  transitGet('/stops/nearby', { latitude: lat, longitude: lng, radiusMeters, limit });
+
 /** GET /api/transit/alerts — service alerts, optionally filtered to a route */
 export const getServiceAlerts = (routeNumber = '') =>
   transitGet('/alerts', { routeNumber });

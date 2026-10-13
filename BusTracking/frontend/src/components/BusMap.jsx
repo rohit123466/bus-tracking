@@ -52,9 +52,10 @@ export default function BusMap({
   onSelectStop,
   onSelectBus,
   selectedStop,
-  selectedBusId,   // vehicleId to highlight (Feature 6)
+  selectedBusId,
   walkingRoute,
   routeMap,
+  nearbyStops,       // Array of NearbyStop from NearestBusStand — pinned with distance label
 }) {
   const busesAtStop = (stopName) => buses.filter((b) => b.stopName === stopName);
 
@@ -92,9 +93,18 @@ export default function BusMap({
         </Marker>
       )}
 
-      {/* Walking route overlay */}
-      {walkingRoute?.available && (
+      {/* Walking route overlay — solid line when ORS route available, dashed straight-line fallback */}
+      {walkingRoute?.available && walkingRoute.coordinates?.length > 0 && (
         <Polyline positions={walkingRoute.coordinates} pathOptions={{ color: '#16835b', weight: 5 }} />
+      )}
+      {!walkingRoute?.available && walkingRoute?.stop && userLocation && (
+        <Polyline
+          positions={[
+            [userLocation.lat, userLocation.lng],
+            [walkingRoute.stop.lat, walkingRoute.stop.lng],
+          ]}
+          pathOptions={{ color: '#16835b', weight: 3, dashArray: '8 6', opacity: 0.7 }}
+        />
       )}
 
       {/* Route map shapes + stop markers */}
@@ -113,6 +123,34 @@ export default function BusMap({
           eventHandlers={{ click: () => onSelectStop?.(s) }}
         >
           <Popup>{s.name}</Popup>
+        </Marker>
+      ))}
+
+      {/* Nearby bus stand markers (from NearestBusStand component) */}
+      {nearbyStops?.filter(s => s.id !== selectedStop?.id).map(s => (
+        <Marker
+          key={'nbs-' + s.id}
+          position={[s.lat, s.lng]}
+          icon={stopIconFor(s.name)}
+          eventHandlers={{ click: () => onSelectStop?.(s) }}
+        >
+          <Popup>
+            <strong>{s.name}</strong>
+            <div style={{ fontSize: 12, marginTop: 3 }}>
+              {Math.round(s.distanceMeters)} m · ~{Math.ceil(s.walkMinutes)} min walk
+            </div>
+            {s.routeNumbers?.length > 0 && (
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                Routes: {s.routeNumbers.slice(0, 6).join(', ')}
+                {s.routeNumbers.length > 6 && ` +${s.routeNumbers.length - 6} more`}
+              </div>
+            )}
+            {s.liveCount > 0 && (
+              <div style={{ fontSize: 12, color: '#065f46', marginTop: 3 }}>
+                🚍 {s.liveCount} bus{s.liveCount !== 1 ? 'es' : ''} approaching
+              </div>
+            )}
+          </Popup>
         </Marker>
       ))}
 
