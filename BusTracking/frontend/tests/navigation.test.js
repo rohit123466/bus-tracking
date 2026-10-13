@@ -5,6 +5,19 @@ const bus = (id, route = '534', stamp = 1000) => ({ vehicleId: id, routeCode: ro
 test('534 matches exactly, keeps distinct vehicles and deduplicates repeated IDs', () => {
  assert.deepEqual(visibleBuses([bus('a'),bus('b'),bus('a'),bus('c','534E'),bus('d','221')],'534',1001).map(b=>b.vehicleId),['a','b']);
 });
+test('route filtering supports every public number, keeping variants distinct and no distance cutoff', () => {
+ const rows = [
+  bus('v106', '106'), bus('v106a', '106A'), bus('v73', '73'),
+  bus('v419', '419'), bus('v534', '534'), bus('v-tms', 'TMS+')
+ ];
+ for (const [route, id] of [['106', 'v106'], ['106A', 'v106a'], ['73', 'v73'],
+                             ['419', 'v419'], ['534', 'v534'], ['TMS+', 'v-tms']]) {
+  assert.deepEqual(visibleBuses(rows, route, 1001).map(b => b.vehicleId), [id]);
+ }
+ // Search results come from official route identity, not browser GPS proximity.
+ assert.deepEqual(visibleBuses(rows, '106', 1001).map(b => b.vehicleId), ['v106']);
+ assert.deepEqual(visibleBuses(rows, '419', 1001).map(b => b.vehicleId), ['v419']);
+});
 test('route filtering survives replacement polling payloads', () => {
  for(const rows of [[bus('a'),bus('b','221')],[bus('c','221'),bus('d')]]) assert.equal(visibleBuses(rows,'534',1001)[0].routeCode,'534');
 });
