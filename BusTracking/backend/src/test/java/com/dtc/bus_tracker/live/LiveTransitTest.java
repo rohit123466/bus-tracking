@@ -319,4 +319,76 @@ class LiveTransitTest {
         vehicle("second", "b", "tb", now, 28.6), timedTrip("second", "tb", "x", 11, "d", 21));
     assertTrue(alternatives.alternatives("s", "d", "534").options().isEmpty());
   }
+  @Test
+  void routeSearchWorksForAllVerifiedPublicNumbersRatherThanOneHardcodedRoute() {
+    List<String> publicNumbers = List.of("106", "534", "73", "410", "106A", "221", "TMS+");
+    List<FeedEntity> positions = new ArrayList<>();
+    for (int i = 0; i < publicNumbers.size(); i++) {
+      String id = "official-route-" + i;
+      String number = publicNumbers.get(i);
+      index.routes.put(id, new TransitIndex.Route(id, number, number + "UP", "UP", false));
+      positions.add(vehicle("vehicle-" + i, id, "", now, 28.6));
+    }
+    feed(positions.toArray(FeedEntity[]::new));
+
+    for (int i = 0; i < publicNumbers.size(); i++) {
+      String number = publicNumbers.get(i);
+      var result = service.buses(number.toLowerCase(Locale.ROOT));
+      assertEquals(LiveTransitService.RouteMappingStatus.MAPPED, result.routeMapping());
+      assertEquals(List.of("vehicle-" + i),
+          result.buses().stream().map(LiveTransitService.Bus::vehicleId).toList(),
+          "Exact filtering failed for public route " + number);
+      assertTrue(result.matchedRouteIds().contains("official-route-" + i));
+      assertEquals(number, result.buses().getFirst().routeCode());
+    }
+  }
+
+  @Test
+  void routeSearchIncludesAllDirectionsAndIgnoresNearbyRadiusForAnyRoute() {
+    index.routes.put("otd-up", new TransitIndex.Route("otd-up", "410", "410UP", "UP", true));
+    index.routes.put("otd-down", new TransitIndex.Route("otd-down", "410", "410DOWN", "DOWN", true));
+    index.routes.put("otd-variant", new TransitIndex.Route("otd-variant", "410A", "410AUP", "UP", true));
+    feed(vehicle("near", "otd-up", "", now, 28.6),
+        vehicle("far", "otd-down", "", now, 28.9),
+        vehicle("variant", "otd-variant", "", now, 28.6));
+
+    var result = service.buses("410");
+    assertEquals(Set.of("near", "far"),
+        new HashSet<>(result.buses().stream().map(LiveTransitService.Bus::vehicleId).toList()));
+    assertEquals(List.of("otd-down", "otd-up"), result.matchedRouteIds());
+    assertEquals(1, service.nearbyBuses(28.6, 77.2, 500, "410").buses().size(),
+        "Only the separate nearby API is allowed to use a distance radius");
+    assertEquals("variant", service.buses("410A").buses().getFirst().vehicleId());
+  }
+
+  @Test
+  void routeIdOrOfficialTripIdCanIdentifyVehiclesWithoutDatabasePrimaryKeys() {
+    index.routes.put("api-410", new TransitIndex.Route("api-410", "410", "410UP", "UP", false));
+    index.trips.put("api-trip-410", new TransitIndex.Trip("api-trip-410",
+        "api-410", "0", "", List.of()));
+    feed(vehicle("route-only", "api-410", "", now, 28.6),
+        vehicle("trip-only", "", "api-trip-410", now, 28.6),
+        vehicle("conflict", "534", "api-trip-410", now, 28.6));
+
+    var result = service.buses("410");
+    assertEquals(Set.of("route-only", "trip-only"),
+        new HashSet<>(result.buses().stream().map(LiveTransitService.Bus::vehicleId).toList()));
+    assertTrue(result.warnings().stream().anyMatch(w -> w.contains("conflicting")));
+  }
+
+  @Test
+  void conflictingRealtimeDirectionCannotBeMappedToAnOfficialTrip() {
+    index.routes.put("api-73", new TransitIndex.Route("api-73", "73", "73UP", "UP", true));
+    index.trips.put("api-trip-73", new TransitIndex.Trip("api-trip-73",
+        "api-73", "0", "", List.of()));
+    FeedEntity.Builder wrongDirection = vehicle("wrong", "api-73", "api-trip-73", now, 28.6)
+        .toBuilder();
+    wrongDirection.getVehicleBuilder().getTripBuilder().setDirectionId(1);
+    feed(vehicle("correct", "api-73", "api-trip-73", now, 28.6),
+        wrongDirection.build());
+
+    assertEquals(List.of("correct"),
+        service.buses("73").buses().stream().map(LiveTransitService.Bus::vehicleId).toList());
+  }
+
 }
