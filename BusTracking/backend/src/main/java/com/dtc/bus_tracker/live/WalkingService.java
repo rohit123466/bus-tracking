@@ -82,8 +82,13 @@ public class WalkingService {
       var feature = json.readTree(response.body()).path("features").path(0);
       var summary = feature.path("properties").path("summary");
       List<List<Double>> coordinates = new ArrayList<>();
-      for (var p : feature.path("geometry").path("coordinates"))
+      for (var p : feature.path("geometry").path("coordinates")) {
+        if (!p.isArray() || p.size() < 2 || !p.get(0).isNumber() || !p.get(1).isNumber()
+            || !Double.isFinite(p.get(0).asDouble()) || !Double.isFinite(p.get(1).asDouble())
+            || Math.abs(p.get(0).asDouble()) > 180 || Math.abs(p.get(1).asDouble()) > 90)
+          throw new IllegalArgumentException("Invalid pedestrian geometry");
         coordinates.add(List.of(p.get(1).asDouble(), p.get(0).asDouble()));
+      }
       if (coordinates.size() < 2 || !summary.has("distance") || !summary.has("duration"))
         throw new IllegalArgumentException("Incomplete pedestrian route");
       var start = coordinates.getFirst();
@@ -92,7 +97,11 @@ public class WalkingService {
           || Geometry.distance(stop.lat(), stop.lng(), end.get(0), end.get(1)) > 75)
         throw new IllegalArgumentException(
             "Provider snapped endpoints too far from the requested locations");
-      if (summary.path("distance").asDouble() < 0 || summary.path("duration").asDouble() < 0)
+      if (!summary.path("distance").isNumber() || !summary.path("duration").isNumber()
+          || !Double.isFinite(summary.path("distance").asDouble())
+          || !Double.isFinite(summary.path("duration").asDouble())
+          || summary.path("distance").asDouble() < 0 || summary.path("duration").asDouble() < 0
+          || (summary.path("distance").asDouble() > 1 && summary.path("duration").asDouble() == 0))
         throw new IllegalArgumentException("Invalid route metrics");
       List<Maneuver> maneuvers = new ArrayList<>();
       for (var segment : feature.path("properties").path("segments"))

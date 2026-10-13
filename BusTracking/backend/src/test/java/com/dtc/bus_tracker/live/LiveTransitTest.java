@@ -94,6 +94,74 @@ class LiveTransitTest {
     assertEquals("534", TransitIndex.publicNumber("534", "anything"));
   }
 
+  @Test void explicitStoppedSpeedIsNeverReplacedByHistoricalMovement() {
+    feed(vehicle("a", "1824", "t", now - 20, 28.6));
+    var stopped = vehicle("a", "1824", "t", now, 28.601).toBuilder();
+    stopped.getVehicleBuilder().getPositionBuilder().setSpeed(0);
+    feed(stopped.build());
+    assertEquals(0.0, snapshot.vehicles().get("a").speedKmh());
+  }
+
+  @Test void undatedAndInvalidGpsCannotBecomeLiveBuses() {
+    var undated = vehicle("a", "1824", "t", now, 28.6).toBuilder();
+    undated.getVehicleBuilder().clearTimestamp();
+    feed(undated.build(), vehicle("bad", "1824", "t", now, Double.NaN),
+        vehicle("outside", "1824", "t", now, 91), vehicle("future", "1824", "t", now + 60, 28.6));
+    assertTrue(service.buses("534").buses().isEmpty());
+  }
+
+  @Test void contradictoryDirectionIsExcludedFromRouteResults() {
+    var wrong = vehicle("a", "1824", "t", now, 28.6).toBuilder();
+    wrong.getVehicleBuilder().getTripBuilder().setDirectionId(1);
+    feed(wrong.build());
+    assertTrue(service.buses("534").buses().isEmpty());
+  }
+
+  @Test void tripUpdatesMustMatchRouteStopAndServiceInstance() {
+    for (String mismatch : List.of("route", "stop", "date", "time", "direction")) {
+      var wrong = update("a", 5, 15).toBuilder();
+      switch (mismatch) {
+        case "route" -> wrong.getTripUpdateBuilder().getTripBuilder().setRouteId("534");
+        case "stop" -> wrong.getTripUpdateBuilder().getStopTimeUpdateBuilder(0).setStopId("d");
+        case "date" -> wrong.getTripUpdateBuilder().getTripBuilder().setStartDate("20260101");
+        case "time" -> wrong.getTripUpdateBuilder().getTripBuilder().setStartTime("12:00:00");
+        case "direction" -> wrong.getTripUpdateBuilder().getTripBuilder().setDirectionId(1);
+      }
+      feed(vehicle("a", "1824", "t", now, 28.6), wrong.build());
+      assertTrue(service.arrivals("s").arrivals().isEmpty(), mismatch);
+    }
+  }
+
+  @Test void staleUpdatesAndPastStopSequenceCannotSupplyPredictions() {
+    var old = update("a", 5, 15).toBuilder();
+    old.getTripUpdateBuilder().setTimestamp(now - 121);
+    feed(vehicle("a", "1824", "t", now, 28.6), old.build());
+    assertTrue(service.arrivals("s").arrivals().isEmpty());
+    var passed = vehicle("a", "1824", "t", now, 28.6).toBuilder();
+    passed.getVehicleBuilder().setCurrentStopSequence(2);
+    feed(passed.build(), update("a", 5, 15));
+    assertTrue(service.arrivals("s").arrivals().isEmpty());
+  }
+
+  @Test void arrivalContractIncludesPositionAndDirection() {
+    feed(vehicle("a", "1824", "t", now, 28.6), update("a", 5, 15));
+    var arrival = service.arrivals("s").arrivals().getFirst();
+    assertEquals("UP", arrival.direction());
+    assertEquals(28.6, arrival.busLatitude(), .00001);
+    assertEquals(77.2, arrival.busLongitude(), .00001);
+  }
+
+  @Test void cancellationDoesNotSuppressDifferentServiceInstance() {
+    var cancel = update("a", 5, 15).toBuilder();
+    cancel.getTripUpdateBuilder().getTripBuilder()
+        .setScheduleRelationship(TripDescriptor.ScheduleRelationship.CANCELED).setStartDate("20260101");
+    feed(vehicle("a", "1824", "t", now, 28.6), cancel.build());
+    assertEquals(1, service.buses("534").buses().size());
+    cancel.getTripUpdateBuilder().getTripBuilder().clearStartDate();
+    feed(vehicle("a", "1824", "t", now, 28.6), cancel.build());
+    assertTrue(service.buses("534").buses().isEmpty());
+  }
+
   @Test
   void exactPublicNumberNeverMatchesInternalRouteId() {
     feed(

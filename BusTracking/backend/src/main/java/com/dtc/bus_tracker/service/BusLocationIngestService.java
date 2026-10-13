@@ -31,12 +31,8 @@ public class BusLocationIngestService {
 
     private static final String BUS_TOPIC = "/topic/buses";
 
-    // The real Delhi OTD feed reports speed=0 for every vehicle regardless of
-    // actual movement, so a 0/missing feed speed is derived from the distance
-    // and elapsed time between this and the vehicle's last known position
-    // instead of trusted as-is. Skip derivation on polls closer together than
-    // this, and cap the result, so GPS jitter between near-simultaneous
-    // pings can't produce spurious huge speeds.
+    // Derive only absent speed from recent observations on the same route.
+    // An explicit zero means stopped; implausible movement remains unavailable.
     private static final long MIN_INTERVAL_SECONDS_FOR_SPEED = 3;
     private static final double MAX_PLAUSIBLE_SPEED_KMH = 120.0;
 
@@ -47,7 +43,7 @@ public class BusLocationIngestService {
     private final SimpMessagingTemplate messagingTemplate;
 
     public void ingest(BusLocationEvent event) {
-        if (event.getSpeedKmh() == null || event.getSpeedKmh() == 0.0) {
+        if (event.getSpeedKmh() == null) {
             busLocationStore.findByVehicleId(event.getVehicleId())
                     .ifPresent(previous -> deriveSpeedFromMovement(previous, event));
         }
@@ -63,15 +59,17 @@ public class BusLocationIngestService {
             return;
         }
         long elapsedSeconds = current.getTimestamp() - previous.getTimestamp();
-        if (elapsedSeconds < MIN_INTERVAL_SECONDS_FOR_SPEED) {
+        if (elapsedSeconds < MIN_INTERVAL_SECONDS_FOR_SPEED || elapsedSeconds > 120
+                || !java.util.Objects.equals(previous.getRouteId(), current.getRouteId())) {
             return;
         }
 
         double distanceMeters = GeoUtils.haversine(
                 previous.getLatitude(), previous.getLongitude(),
                 current.getLatitude(), current.getLongitude());
-        double speedKmh = Math.min((distanceMeters / elapsedSeconds) * 3.6, MAX_PLAUSIBLE_SPEED_KMH);
-        current.setSpeedKmh(speedKmh);
+        double speedKmh = (distanceMeters / elapsedSeconds) * 3.6;
+        if (Double.isFinite(speedKmh) && speedKmh >= 3 && speedKmh <= MAX_PLAUSIBLE_SPEED_KMH)
+            current.setSpeedKmh(speedKmh);
     }
 
     private Bus upsertBus(BusLocationEvent event) {
@@ -85,9 +83,7 @@ public class BusLocationIngestService {
 
         if (event.getRouteId() != null) {
             Route route = routeRepository.findByRouteCode(event.getRouteId()).orElse(null);
-            if (route != null) {
-                bus.setRoute(route);
-            }
+            bus.setRoute(route);
         }
         return busRepository.save(bus);
     }

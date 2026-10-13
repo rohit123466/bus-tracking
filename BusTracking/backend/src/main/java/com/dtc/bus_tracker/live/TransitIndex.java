@@ -53,6 +53,7 @@ public class TransitIndex {
     read(
         "stops.txt",
         r -> {
+          if (!validCoordinate(r.get("stop_lat"), r.get("stop_lon"))) return;
           Stop s =
               new Stop(
                   r.get("stop_id"),
@@ -64,15 +65,17 @@ public class TransitIndex {
         });
     read(
         "trips.txt",
-        r ->
-            trips.put(
+        r -> {
+          if (!routes.containsKey(r.get("route_id"))) return;
+          trips.put(
                 r.get("trip_id"),
                 new Trip(
                     r.get("trip_id"),
                     r.get("route_id"),
                     r.getOrDefault("direction_id", ""),
                     r.getOrDefault("shape_id", ""),
-                    new ArrayList<>())));
+                    new ArrayList<>()));
+        });
     read(
         "stop_times.txt",
         r -> {
@@ -90,26 +93,41 @@ public class TransitIndex {
         });
     // Preserve GTFS stop sequence, including times beyond midnight.
     trips.values().forEach(t -> t.visits().sort(Comparator.comparingInt(Visit::sequence)));
+    Set<String> invalidShapes = new HashSet<>();
     read(
         "shapes.txt",
-        r ->
-            shapes
+        r -> {
+          if (!validCoordinate(r.get("shape_pt_lat"), r.get("shape_pt_lon"))) {
+            invalidShapes.add(r.get("shape_id"));
+            return;
+          }
+          shapes
                 .computeIfAbsent(r.get("shape_id"), k -> new ArrayList<>())
                 .add(
                     new Point(
                         Double.parseDouble(r.get("shape_pt_lat")),
                         Double.parseDouble(r.get("shape_pt_lon")),
-                        Integer.parseInt(r.get("shape_pt_sequence")))));
+                        Integer.parseInt(r.get("shape_pt_sequence"))));
+        });
+    invalidShapes.forEach(shapes::remove);
     shapes.values().forEach(p -> p.sort(Comparator.comparingInt(Point::sequence)));
-    if (routes.isEmpty() || stops.isEmpty())
+    if (routes.isEmpty() || stops.isEmpty() || trips.isEmpty())
       throw new IllegalStateException(
-          "GTFS route/stop mappings are empty; resolve Git LFS and configure a valid GTFS"
+          "GTFS route/stop/trip mappings are empty; resolve Git LFS and configure a valid GTFS"
               + " archive.");
     warning =
         shapes.isEmpty()
             ? "GTFS has no shapes: along-route distance and geometry-based ETA are unavailable."
                   + " Fresh TripUpdates may still supply arrival predictions."
             : null;
+    if (!invalidShapes.isEmpty()) warning = "Invalid GTFS shapes excluded; affected trips have no geometry ETA.";
+  }
+
+  private static boolean validCoordinate(String lat, String lng) {
+    try {
+      double a = Double.parseDouble(lat), b = Double.parseDouble(lng);
+      return Double.isFinite(a) && Double.isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180;
+    } catch (RuntimeException e) { return false; }
   }
 
   public static String publicNumber(String shortName, String longName) {

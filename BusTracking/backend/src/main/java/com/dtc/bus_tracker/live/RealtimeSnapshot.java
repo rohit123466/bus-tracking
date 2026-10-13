@@ -11,6 +11,8 @@ public class RealtimeSnapshot {
       String id,
       String routeId,
       String tripId,
+      String startDate,
+      String startTime,
       String direction,
       Integer sequence,
       double lat,
@@ -23,6 +25,9 @@ public class RealtimeSnapshot {
       String tripId,
       String vehicleId,
       String startDate,
+      String startTime,
+      String routeId,
+      String direction,
       String stopId,
       Integer sequence,
       Long arrival,
@@ -32,9 +37,11 @@ public class RealtimeSnapshot {
 
   private volatile Map<String, Vehicle> vehicles = Map.of();
   private volatile Map<String, List<Prediction>> predictions = Map.of();
-  private volatile Set<String> cancelled = Set.of();
+  private record Cancellation(TripDescriptor trip, long timestamp) {}
+  private volatile List<Cancellation> cancelled = List.of();
   public volatile long fetchedAt;
   public volatile String feedError = "Live feed has not been received.";
+  public volatile String tripUpdatesError;
 
   public Map<String, Vehicle> vehicles() {
     return vehicles;
@@ -44,8 +51,16 @@ public class RealtimeSnapshot {
     return predictions.getOrDefault(tripId, List.of());
   }
 
-  public boolean cancelled(String tripId) {
-    return cancelled.contains(tripId);
+  public boolean cancelled(Vehicle vehicle) {
+    return cancelled.stream().anyMatch(c -> fresh(c.timestamp())
+        && c.trip().getTripId().equals(vehicle.tripId())
+        && (c.trip().getRouteId().isBlank() || c.trip().getRouteId().equals(vehicle.routeId()))
+        && (!c.trip().hasDirectionId() || String.valueOf(c.trip().getDirectionId()).equals(vehicle.direction()))
+        && sameInstance(c.trip().getStartDate(), c.trip().getStartTime(), vehicle));
+  }
+
+  public static boolean sameInstance(String date, String time, Vehicle vehicle) {
+    return date.equals(vehicle.startDate()) && time.equals(vehicle.startTime());
   }
 
   public static boolean fresh(long stamp) {
@@ -60,7 +75,7 @@ public class RealtimeSnapshot {
       throw new IllegalArgumentException("Differential GTFS realtime feeds are not supported.");
     Map<String, Vehicle> next = new HashMap<>();
     Map<String, List<Prediction>> times = new HashMap<>();
-    Set<String> cancelledTrips = new HashSet<>();
+    List<Cancellation> cancelledTrips = new ArrayList<>();
     long header = feed.getHeader().hasTimestamp() ? feed.getHeader().getTimestamp() : 0;
     boolean hasUpdates = false;
     for (var entity : feed.getEntityList()) {
@@ -68,6 +83,7 @@ public class RealtimeSnapshot {
       if (entity.hasVehicle()) {
         var v = entity.getVehicle();
         var td = v.getTrip();
+        if (td.getScheduleRelationship() != TripDescriptor.ScheduleRelationship.SCHEDULED) continue;
         var p = v.getPosition();
         String id = v.getVehicle().getId();
         if (id.isBlank()) id = v.getVehicle().getLabel();
@@ -77,14 +93,19 @@ public class RealtimeSnapshot {
             || !Double.isFinite(lng)
             || Math.abs(lat) > 90
             || Math.abs(lng) > 180) continue;
-        long stamp = v.hasTimestamp() ? v.getTimestamp() : header;
+        // Feed publication time is not the time the GPS fix was measured.
+        long stamp = v.hasTimestamp() ? v.getTimestamp() : 0;
         Double speed = p.hasSpeed() ? p.getSpeed() * 3.6 : null;
         var old = vehicles.get(id);
-        if ((speed == null || speed == 0)
+        if (speed == null
             && old != null
             && stamp - old.timestamp() >= 5
             && stamp - old.timestamp() <= 120
-            && old.tripId().equals(td.getTripId())) {
+            && !td.getTripId().isBlank()
+            && old.tripId().equals(td.getTripId())
+            && old.routeId().equals(td.getRouteId())
+            && old.startDate().equals(td.getStartDate())
+            && old.startTime().equals(td.getStartTime())) {
           double derived =
               Geometry.distance(lat, lng, old.lat(), old.lng()) / (stamp - old.timestamp()) * 3.6;
           if (derived >= 3 && derived <= 100) speed = derived;
@@ -95,12 +116,15 @@ public class RealtimeSnapshot {
                 id,
                 td.getRouteId(),
                 td.getTripId(),
+                td.getStartDate(),
+                td.getStartTime(),
                 td.hasDirectionId() ? String.valueOf(td.getDirectionId()) : "",
                 v.hasCurrentStopSequence() ? v.getCurrentStopSequence() : null,
                 lat,
                 lng,
                 speed,
-                p.hasBearing() ? (double) p.getBearing() : null,
+                p.hasBearing() && Float.isFinite(p.getBearing()) && p.getBearing() >= 0
+                    && p.getBearing() < 360 ? (double) p.getBearing() : null,
                 stamp);
         if (!next.containsKey(id) || next.get(id).timestamp() < stamp) next.put(id, candidate);
       }
@@ -112,9 +136,11 @@ public class RealtimeSnapshot {
         long stamp = u.hasTimestamp() ? u.getTimestamp() : header;
         if (!fresh(stamp)) continue;
         if (u.getTrip().getScheduleRelationship() == TripDescriptor.ScheduleRelationship.CANCELED) {
-          cancelledTrips.add(trip);
+          cancelledTrips.add(new Cancellation(u.getTrip(), stamp));
           continue;
         }
+        if (u.getTrip().getScheduleRelationship() != TripDescriptor.ScheduleRelationship.SCHEDULED)
+          continue;
         for (var s : u.getStopTimeUpdateList()) {
           Long arrival =
               s.hasArrival() && s.getArrival().hasTime() ? s.getArrival().getTime() : null;
@@ -127,6 +153,9 @@ public class RealtimeSnapshot {
                       trip,
                       u.getVehicle().getId(),
                       u.getTrip().getStartDate(),
+                      u.getTrip().getStartTime(),
+                      u.getTrip().getRouteId(),
+                      u.getTrip().hasDirectionId() ? String.valueOf(u.getTrip().getDirectionId()) : "",
                       s.getStopId(),
                       s.hasStopSequence() ? s.getStopSequence() : null,
                       arrival,
@@ -145,7 +174,8 @@ public class RealtimeSnapshot {
     }
     if (updateTrips || hasUpdates) {
       predictions = Map.copyOf(times);
-      cancelled = Set.copyOf(cancelledTrips);
+      cancelled = List.copyOf(cancelledTrips);
+      tripUpdatesError = null;
     }
   }
 }

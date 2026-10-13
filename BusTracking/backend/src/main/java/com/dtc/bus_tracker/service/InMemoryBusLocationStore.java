@@ -25,11 +25,13 @@ public class InMemoryBusLocationStore implements BusLocationStore {
 
     @Override
     public Collection<BusLocationEvent> findAll() {
-        return buses.values();
+        buses.values().removeIf(e -> e.getTimestamp() == null || !com.dtc.bus_tracker.live.RealtimeSnapshot.fresh(e.getTimestamp()));
+        return java.util.List.copyOf(buses.values());
     }
 
     @Override
     public Optional<BusLocationEvent> findByVehicleId(String vehicleId) {
-        return Optional.ofNullable(buses.get(vehicleId));
+        return Optional.ofNullable(buses.get(vehicleId))
+            .filter(e -> e.getTimestamp() != null && com.dtc.bus_tracker.live.RealtimeSnapshot.fresh(e.getTimestamp()));
     }
 }

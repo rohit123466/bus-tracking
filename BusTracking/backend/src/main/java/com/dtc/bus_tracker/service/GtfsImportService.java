@@ -10,7 +10,7 @@ import com.dtc.bus_tracker.repository.StopTimeRepository;
 import com.dtc.bus_tracker.repository.TripRepository;
 import com.opencsv.CSVReader;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStreamReader;
@@ -42,7 +42,11 @@ public class GtfsImportService {
     private final TripRepository tripRepository;
     private final StopTimeRepository stopTimeRepository;
 
-    private static final String GTFS_ZIP_PATH = "static/GTFS.zip";
+    @Value("${gtfs.import.resource:classpath:static/GTFS.zip}")
+    private Resource archive;
+
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
 
     @Value("${gtfs.import.center-lat:28.77}")
     private double centerLat;
@@ -73,6 +77,7 @@ public class GtfsImportService {
      */
     private static final String LFS_POINTER_MAGIC = "version https://git-lfs.github.com/spec/v1";
 
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public void importAll() throws Exception {
         if (routeRepository.count() > 0) {
             System.out.println("GTFS already seeded, skipping import.");
@@ -117,10 +122,9 @@ public class GtfsImportService {
     }
 
     private void assertGtfsZipIsResolved() throws Exception {
-        ClassPathResource resource = new ClassPathResource(GTFS_ZIP_PATH);
         byte[] head = new byte[64];
         int read;
-        try (var in = resource.getInputStream()) {
+        try (var in = archive.getInputStream()) {
             read = in.readNBytes(head, 0, head.length);
         }
         String prefix = new String(head, 0, read, java.nio.charset.StandardCharsets.US_ASCII);
@@ -156,7 +160,8 @@ public class GtfsImportService {
                 int wheelchairIdx = columnIndex(header, "wheelchair_boarding");
                 String[] row;
                 while ((row = reader.readNext()) != null) {
-                    rows.add(new StopRow(row[1], row[4], Double.parseDouble(row[2]), Double.parseDouble(row[3]),
+                    rows.add(new StopRow(value(row, header, "stop_id"), value(row, header, "stop_name"),
+                            Double.parseDouble(value(row, header, "stop_lat")), Double.parseDouble(value(row, header, "stop_lon")),
                             isFlagSet(row, wheelchairIdx)));
                 }
             }
@@ -172,7 +177,8 @@ public class GtfsImportService {
                 int wheelchairIdx = columnIndex(header, "wheelchair_accessible");
                 String[] row;
                 while ((row = reader.readNext()) != null) {
-                    rows.add(new TripRow(row[0], row[1], row[2], row.length > 3 ? row[3] : null,
+                    rows.add(new TripRow(value(row, header, "route_id"), value(row, header, "service_id"),
+                            value(row, header, "trip_id"), value(row, header, "shape_id"),
                             isFlagSet(row, wheelchairIdx)));
                 }
             }
@@ -198,15 +204,20 @@ public class GtfsImportService {
         return columnIndex >= 0 && columnIndex < row.length && "1".equals(row[columnIndex].trim());
     }
 
+    private String value(String[] row, String[] header, String name) {
+        int column = columnIndex(header, name);
+        return column < 0 || column >= row.length ? "" : row[column].trim();
+    }
+
     private Set<String> collectTripIdsForStops(Set<String> keptStopIds) throws Exception {
         Set<String> tripIds = new HashSet<>();
         withZipEntry("stop_times.txt", zis -> {
             try (CSVReader reader = new CSVReader(new InputStreamReader(zis))) {
-                reader.readNext();
+                String[] header = reader.readNext();
                 String[] row;
                 while ((row = reader.readNext()) != null) {
-                    if (keptStopIds.contains(row[3])) {
-                        tripIds.add(row[0]);
+                    if (keptStopIds.contains(value(row, header, "stop_id"))) {
+                        tripIds.add(value(row, header, "trip_id"));
                     }
                 }
             }
@@ -219,16 +230,17 @@ public class GtfsImportService {
         Map<String, Route> byCode = new HashMap<>();
         withZipEntry("routes.txt", zis -> {
             try (CSVReader reader = new CSVReader(new InputStreamReader(zis))) {
-                reader.readNext();
+                String[] header = reader.readNext();
                 String[] row;
                 int count = 0;
                 while ((row = reader.readNext()) != null) {
-                    String routeCode = row[1];
+                    String routeCode = value(row, header, "route_id");
                     if (filtered && !keptRouteCodes.contains(routeCode)) continue;
 
                     Route route = Route.builder()
                             .routeCode(routeCode)
-                            .name(row[2].isBlank() ? row[3] : row[2])
+                            .name(value(row, header, "route_short_name").isBlank()
+                                ? value(row, header, "route_long_name") : value(row, header, "route_short_name"))
                             .build();
                     routeRepository.save(route);
                     byCode.put(routeCode, route);
@@ -291,22 +303,25 @@ public class GtfsImportService {
 
         withZipEntry("stop_times.txt", zis -> {
             try (CSVReader reader = new CSVReader(new InputStreamReader(zis))) {
-                reader.readNext();
+                String[] header = reader.readNext();
                 String[] row;
                 while ((row = reader.readNext()) != null) {
-                    Trip trip = tripByTripId.get(row[0]);
-                    Stop stop = stopByStopId.get(row[3]);
+                    Trip trip = tripByTripId.get(value(row, header, "trip_id"));
+                    Stop stop = stopByStopId.get(value(row, header, "stop_id"));
                     if (trip == null || stop == null) {
                         counters[1]++;
                         continue;
                     }
+                    // Optional interpolated times cannot be represented by the legacy non-null
+                    // LocalTime schema; the full live index still retains these stop visits.
+                    if (value(row, header, "arrival_time").isBlank() || value(row, header, "departure_time").isBlank()) continue;
 
                     StopTime st = StopTime.builder()
                             .trip(trip)
                             .stop(stop)
-                            .arrivalTime(parseGtfsTime(row[1]))
-                            .departureTime(parseGtfsTime(row[2]))
-                            .stopSequence(Integer.parseInt(row[4]))
+                            .arrivalTime(parseGtfsTime(value(row, header, "arrival_time")))
+                            .departureTime(parseGtfsTime(value(row, header, "departure_time")))
+                            .stopSequence(Integer.parseInt(value(row, header, "stop_sequence")))
                             .build();
 
                     batch.add(st);
@@ -315,6 +330,8 @@ public class GtfsImportService {
 
                     if (batch.size() >= batchSize) {
                         stopTimeRepository.saveAll(batch);
+                        entityManager.flush();
+                        entityManager.clear();
                         batch.clear();
                     }
                 }
@@ -342,7 +359,7 @@ public class GtfsImportService {
     }
 
     private void withZipEntry(String entryName, ZipEntryConsumer consumer) throws Exception {
-        try (ZipInputStream zis = new ZipInputStream(new ClassPathResource(GTFS_ZIP_PATH).getInputStream())) {
+        try (ZipInputStream zis = new ZipInputStream(archive.getInputStream())) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
                 if (entry.getName().equals(entryName)) {
@@ -351,6 +368,7 @@ public class GtfsImportService {
                 }
             }
         }
+        throw new java.io.FileNotFoundException("Missing required GTFS entry: " + entryName);
     }
 
     /**

@@ -53,10 +53,10 @@ public class NearbyBusService {
 
         List<NearbyBusResponse> responses = new ArrayList<>();
         for (BusLocationEvent bus : buses) {
+            if (bus.getTimestamp() == null || !com.dtc.bus_tracker.live.RealtimeSnapshot.fresh(bus.getTimestamp())) continue;
             double distanceToUser = GeoUtils.haversine(lat, lng, bus.getLatitude(), bus.getLongitude());
             
             if (distanceToUser <= radiusMeters) {
-                int etaMinutes = (int) Math.ceil(distanceToUser / 333.0);
                 Boolean accessible = wheelchairAccessibleForRouteCode(bus.getRouteId());
                 responses.add(NearbyBusResponse.builder()
                         .vehicleId(bus.getVehicleId())
@@ -66,7 +66,7 @@ public class NearbyBusService {
                         .busLongitude(bus.getLongitude())
                         .distanceToStop(minStopDist)
                         .distanceToUser(distanceToUser)
-                        .etaMinutes(etaMinutes)
+                        .etaMinutes(null)
                         .wheelchairAccessible(accessible)
                         .wheelchairSpaces(Boolean.TRUE.equals(accessible) ? wheelchairSpaces : 0)
                         .wheelchairSpaceAvailable(bus.getWheelchairSpaceAvailable())

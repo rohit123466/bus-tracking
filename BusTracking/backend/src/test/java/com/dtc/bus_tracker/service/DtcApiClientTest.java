@@ -23,7 +23,10 @@ class DtcApiClientTest {
             try (var output = exchange.getResponseBody()) { output.write(body); }
         });
         server.start();
-        snapshot = new RealtimeSnapshot(); client = new DtcApiClient(snapshot);
+        snapshot = new RealtimeSnapshot();
+        var index = new com.dtc.bus_tracker.live.TransitIndex();
+        index.routes.put("r", new com.dtc.bus_tracker.live.TransitIndex.Route("r", "534", "534UP", "UP", false));
+        client = new DtcApiClient(snapshot, new com.dtc.bus_tracker.live.LiveTransitService(index, snapshot));
         ReflectionTestUtils.setField(client, "apiUrl", "http://127.0.0.1:" + server.getAddress().getPort() + "/feed");
         ReflectionTestUtils.setField(client, "apiKey", "test-secret");
         ReflectionTestUtils.setField(client, "tripUpdatesUrl", "");
@@ -48,6 +51,7 @@ class DtcApiClientTest {
     FeedEntity vehicle(String entity, String id, long stamp, float latitude) {
         return FeedEntity.newBuilder().setId(entity).setVehicle(VehiclePosition.newBuilder()
             .setVehicle(VehicleDescriptor.newBuilder().setId(id))
+            .setTrip(TripDescriptor.newBuilder().setRouteId("r"))
             .setPosition(Position.newBuilder().setLatitude(latitude).setLongitude(77.2f))
             .setTimestamp(stamp)).build();
     }
@@ -62,5 +66,15 @@ class DtcApiClientTest {
         assertEquals(1, events.size());
         assertEquals("bus", events.getFirst().getVehicleId());
         assertEquals(now, events.getFirst().getTimestamp());
+    }
+    @Test void publisherExcludesUnmappedRouteAndReportsTripUpdateFailure() throws Exception {
+        long now = Instant.now().getEpochSecond();
+        var unknown = vehicle("1", "bus", now, 28.6f).toBuilder();
+        unknown.getVehicleBuilder().getTripBuilder().setRouteId("unknown");
+        body = FeedMessage.newBuilder().setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0"))
+            .addEntity(unknown.build()).build().toByteArray();
+        ReflectionTestUtils.setField(client, "tripUpdatesUrl", "http://127.0.0.1:" + server.getAddress().getPort() + "/missing");
+        assertTrue(client.fetchVehiclePositions().isEmpty());
+        assertTrue(snapshot.tripUpdatesError.contains("HTTP 404"));
     }
 }

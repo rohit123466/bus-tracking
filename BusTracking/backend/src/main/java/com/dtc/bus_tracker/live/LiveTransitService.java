@@ -28,7 +28,10 @@ public class LiveTransitService {
       Double etaMinutes,
       long lastGpsUpdate,
       String predictionAvailability,
-      String reason) {}
+      String reason,
+      String direction,
+      double busLatitude,
+      double busLongitude) {}
 
   public record Arrivals(List<Arrival> arrivals, List<String> warnings) {}
 
@@ -43,6 +46,8 @@ public class LiveTransitService {
   public TransitIndex.Route route(RealtimeSnapshot.Vehicle v) {
     var trip = index.trips.get(v.tripId());
     if (trip != null && !v.routeId().isBlank() && !trip.routeId().equals(v.routeId())) return null;
+    if (trip != null && !trip.direction().isBlank() && !v.direction().isBlank()
+        && !trip.direction().equals(v.direction())) return null;
     return index.routes.get(trip != null ? trip.routeId() : v.routeId());
   }
 
@@ -63,14 +68,14 @@ public class LiveTransitService {
         continue;
       }
       if (!query.isEmpty() && !query.equals(r.number())) continue;
-      if (live.cancelled(v.tripId())) continue;
+      if (live.cancelled(v)) continue;
       inferred |= r.inferred();
       out.add(
           new Bus(
               v.id(),
               r.id(),
               r.number(),
-              r.direction().isEmpty() ? v.direction() : r.direction(),
+              direction(v, r),
               v.tripId(),
               v.lat(),
               v.lng(),
@@ -110,7 +115,7 @@ public class LiveTransitService {
       if (r == null
           || !serving.contains(r.id())
           || !RealtimeSnapshot.fresh(v.timestamp())
-          || live.cancelled(v.tripId())) continue;
+          || live.cancelled(v)) continue;
       var t = index.trips.get(v.tripId());
       if (t == null) {
         unresolved++;
@@ -139,6 +144,7 @@ public class LiveTransitService {
     List<String> warnings = new ArrayList<>();
     if (index.warning != null) warnings.add(index.warning);
     if (live.feedError != null) warnings.add(live.feedError);
+    if (live.tripUpdatesError != null) warnings.add(live.tripUpdatesError);
     if (unresolved > 0)
       warnings.add(unresolved + " vehicles cannot be resolved to an unambiguous approaching trip.");
     return new Arrivals(result, warnings);
@@ -176,7 +182,11 @@ public class LiveTransitService {
             .filter(
                 p ->
                     RealtimeSnapshot.fresh(p.timestamp())
+                        && RealtimeSnapshot.sameInstance(p.startDate(), p.startTime(), v)
+                        && (p.routeId().isBlank() || p.routeId().equals(trip.routeId()))
+                        && (p.direction().isBlank() || p.direction().equals(trip.direction()))
                         && (p.vehicleId().isBlank() || p.vehicleId().equals(v.id()))
+                        && (p.stopId().isBlank() || p.stopId().equals(visit.stopId()))
                         && (p.sequence() != null
                             ? p.sequence() == visit.sequence()
                             : p.stopId().equals(visit.stopId())))
@@ -195,17 +205,19 @@ public class LiveTransitService {
                 null,
                 v.timestamp(),
                 "UNAVAILABLE",
-                "TripUpdates marks this stop NO_DATA.")
+                "TripUpdates marks this stop NO_DATA.", direction(v, route(v)), v.lat(), v.lng())
             : null;
       if (p.arrival() != null) {
         double minutes = (p.arrival() - Instant.now().getEpochSecond()) / 60.0;
         if (minutes < 0) return null;
         if (minutes <= 180)
           return new Arrival(
-              number, v.id(), trip.id(), distance, minutes, v.timestamp(), "TRIP_UPDATE", null);
+              number, v.id(), trip.id(), distance, minutes, v.timestamp(), "TRIP_UPDATE", null,
+              direction(v, route(v)), v.lat(), v.lng());
       }
     }
-    if (distance != null && v.speedKmh() != null && v.speedKmh() >= 3)
+    if (distance != null && v.speedKmh() != null && v.speedKmh() >= 3
+        && distance / (v.speedKmh() * 1000 / 60) <= 180)
       return new Arrival(
           number,
           v.id(),
@@ -214,9 +226,18 @@ public class LiveTransitService {
           distance / (v.speedKmh() * 1000 / 60),
           v.timestamp(),
           "GEOMETRY_ESTIMATE",
-          "Estimate using recent speed; traffic and dwell time may change arrival.");
+          "Estimate using recent speed; traffic and dwell time may change arrival.",
+          direction(v, route(v)), v.lat(), v.lng());
     if (!approaching) return null;
     return new Arrival(
-        number, v.id(), trip.id(), distance, null, v.timestamp(), "UNAVAILABLE", reason);
+        number, v.id(), trip.id(), distance, null, v.timestamp(), "UNAVAILABLE", reason,
+        direction(v, route(v)), v.lat(), v.lng());
+  }
+
+  private String direction(RealtimeSnapshot.Vehicle v, TransitIndex.Route route) {
+    if (route != null && !route.direction().isBlank()) return route.direction();
+    var trip = index.trips.get(v.tripId());
+    String value = trip == null || trip.direction().isBlank() ? v.direction() : trip.direction();
+    return value.isBlank() ? "Unknown" : "Direction " + value;
   }
 }

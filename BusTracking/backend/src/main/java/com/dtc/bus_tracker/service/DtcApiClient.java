@@ -16,7 +16,12 @@ import java.util.List;
 public class DtcApiClient {
 
     private final com.dtc.bus_tracker.live.RealtimeSnapshot snapshot;
-    public DtcApiClient(com.dtc.bus_tracker.live.RealtimeSnapshot snapshot) { this.snapshot = snapshot; }
+    private final com.dtc.bus_tracker.live.LiveTransitService transit;
+    public DtcApiClient(com.dtc.bus_tracker.live.RealtimeSnapshot snapshot,
+            com.dtc.bus_tracker.live.LiveTransitService transit) {
+        this.snapshot = snapshot;
+        this.transit = transit;
+    }
     @Value("${dtc.trip-updates.url:}") private String tripUpdatesUrl;
 
     @Value("${dtc.api.url:https://otd.delhi.gov.in/api/realtime/VehiclePositions.pb}")
@@ -67,14 +72,22 @@ public class DtcApiClient {
                 var updateRequest = HttpRequest.newBuilder(URI.create(tripUpdatesUrl)).timeout(java.time.Duration.ofSeconds(12)).GET().build();
                 var updates = httpClient.send(updateRequest, HttpResponse.BodyHandlers.ofByteArray());
                 if (updates.statusCode() == 200) snapshot.accept(FeedMessage.parseFrom(updates.body()), false, true);
-            } catch (Exception ignored) { /* existing predictions expire after 120s */ }
+                else snapshot.tripUpdatesError = "TripUpdates unavailable (HTTP " + updates.statusCode() + "). Existing predictions expire after 120 seconds.";
+            } catch (Exception failure) {
+                if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
+                snapshot.tripUpdatesError = "TripUpdates request failed; existing predictions expire after 120 seconds.";
+            }
+        } else {
+            snapshot.tripUpdatesError = "No separate TripUpdates feed configured; arrivals require embedded updates or verified geometry and speed.";
         }
         List<BusLocationEvent> events = new ArrayList<>();
         for (var v : snapshot.vehicles().values()) {
             if (!com.dtc.bus_tracker.live.RealtimeSnapshot.fresh(v.timestamp())) continue;
+            var route = transit.route(v);
+            if (route == null || route.number() == null || snapshot.cancelled(v)) continue;
             events.add(BusLocationEvent.builder()
                     .vehicleId(v.id()).latitude(v.lat()).longitude(v.lng())
-                    .routeId(v.routeId()).timestamp(v.timestamp())
+                    .routeId(route.id()).timestamp(v.timestamp())
                     .speedKmh(v.speedKmh()).bearing(v.bearing())
                     .wheelchairSpaceAvailable(null).build());
         }

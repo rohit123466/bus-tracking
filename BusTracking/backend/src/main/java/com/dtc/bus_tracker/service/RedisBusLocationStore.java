@@ -22,7 +22,7 @@ public class RedisBusLocationStore implements BusLocationStore {
 
     @Override
     public void save(BusLocationEvent event) {
-        redisTemplate.opsForValue().set("bus:" + event.getVehicleId(), event);
+        redisTemplate.opsForValue().set("bus:" + event.getVehicleId(), event, java.time.Duration.ofSeconds(120));
     }
 
     @Override
@@ -34,11 +34,13 @@ public class RedisBusLocationStore implements BusLocationStore {
         return keys.stream()
                 .map(redisTemplate.opsForValue()::get)
                 .filter(Objects::nonNull)
+                .filter(e -> e.getTimestamp() != null && com.dtc.bus_tracker.live.RealtimeSnapshot.fresh(e.getTimestamp()))
                 .collect(Collectors.toList());
     }
 
     @Override
     public Optional<BusLocationEvent> findByVehicleId(String vehicleId) {
-        return Optional.ofNullable(redisTemplate.opsForValue().get("bus:" + vehicleId));
+        return Optional.ofNullable(redisTemplate.opsForValue().get("bus:" + vehicleId))
+            .filter(e -> e.getTimestamp() != null && com.dtc.bus_tracker.live.RealtimeSnapshot.fresh(e.getTimestamp()));
     }
 }

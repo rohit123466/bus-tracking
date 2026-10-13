@@ -12,7 +12,9 @@ public class AlternativeService {
       String boardStopId,
       String alightStopId,
       double waitMinutes,
-      double rideMinutes) {}
+      double rideMinutes,
+      String boardStopName,
+      String alightStopName) {}
 
   public record Option(
       double totalMinutes,
@@ -20,6 +22,7 @@ public class AlternativeService {
       double waitMinutes,
       double rideMinutes,
       double transferMinutes,
+      double walkingDistanceMeters,
       List<Leg> legs) {}
 
   public record Result(
@@ -56,7 +59,7 @@ public class AlternativeService {
                         || routeNumber.isBlank()
                         || routeNumber.equalsIgnoreCase(a.routeNumber()))
             .toList();
-    var baselineOptions = journeys(source, destination, 0, initial, cache);
+    var baselineOptions = journeys(source, destination, 0, 0, initial, cache);
     var baseline =
         baselineOptions.stream().min(Comparator.comparingDouble(Option::totalMinutes)).orElse(null);
     if (baseline == null)
@@ -81,12 +84,14 @@ public class AlternativeService {
         .forEach(candidates::add);
     for (var board : candidates) {
       double walk = 0;
+      double walkingDistance = 0;
       if (!board.id().equals(source)) {
         var path = walking.route(origin.lat(), origin.lng(), board);
         if (!path.available()) continue;
         walk = path.durationSeconds() / 60;
+        walkingDistance = path.distanceMeters();
       }
-      options.addAll(journeys(board.id(), destination, walk, at(board.id(), cache), cache));
+      options.addAll(journeys(board.id(), destination, walk, walkingDistance, at(board.id(), cache), cache));
     }
     double threshold = Math.max(3, baseline.totalMinutes() * .1);
     var better =
@@ -116,6 +121,7 @@ public class AlternativeService {
       String source,
       String dest,
       double walk,
+      double walkingDistance,
       List<LiveTransitService.Arrival> first,
       Map<String, List<LiveTransitService.Arrival>> cache) {
     List<Option> out = new ArrayList<>();
@@ -134,10 +140,10 @@ public class AlternativeService {
                 source,
                 dest,
                 a.etaMinutes() - walk,
-                direct.etaMinutes() - a.etaMinutes());
+                direct.etaMinutes() - a.etaMinutes(), transit.stop(source).name(), transit.stop(dest).name());
         out.add(
             new Option(
-                direct.etaMinutes(), walk, leg.waitMinutes(), leg.rideMinutes(), 0, List.of(leg)));
+                direct.etaMinutes(), walk, leg.waitMinutes(), leg.rideMinutes(), 0, walkingDistance, List.of(leg)));
       }
       for (var visit : trip.visits().subList(from + 1, trip.visits().size())) {
         String transfer = visit.stopId();
@@ -159,7 +165,7 @@ public class AlternativeService {
                   source,
                   transfer,
                   a.etaMinutes() - walk,
-                  reached.etaMinutes() - a.etaMinutes());
+                  reached.etaMinutes() - a.etaMinutes(), transit.stop(source).name(), transit.stop(transfer).name());
           var l2 =
               new Leg(
                   b.routeNumber(),
@@ -167,7 +173,7 @@ public class AlternativeService {
                   transfer,
                   dest,
                   b.etaMinutes() - reached.etaMinutes() - 2,
-                  end.etaMinutes() - b.etaMinutes());
+                  end.etaMinutes() - b.etaMinutes(), transit.stop(transfer).name(), transit.stop(dest).name());
           out.add(
               new Option(
                   end.etaMinutes(),
@@ -175,6 +181,7 @@ public class AlternativeService {
                   l1.waitMinutes() + l2.waitMinutes(),
                   l1.rideMinutes() + l2.rideMinutes(),
                   2,
+                  walkingDistance,
                   List.of(l1, l2)));
         }
       }

@@ -105,4 +105,40 @@ class WalkingServiceTest {
     assertEquals(2, index.nearby(28.6, 77.2, 1000).size());
     assertEquals(90000, index.trips.get("t").visits().get(0).arrival());
   }
+
+  @Test void malformedProviderMetricsCannotBecomeZeroMinuteWalk() {
+    server.createContext("/", e -> {
+      byte[] body = ("{\"features\":[{\"geometry\":{\"coordinates\":[[77.2,28.6],[77.2,28.601]]},"
+          + "\"properties\":{\"summary\":{\"distance\":120,\"duration\":\"invalid\"}}}]}")
+          .getBytes(StandardCharsets.UTF_8);
+      e.sendResponseHeaders(200, body.length);
+      e.getResponseBody().write(body);
+      e.close();
+    });
+    server.start();
+    var result = walking.route(28.6, 77.2, index.stops.get("s"));
+    assertFalse(result.available());
+    assertNull(result.durationSeconds());
+    assertTrue(result.maneuvers().isEmpty());
+  }
+
+  @Test void replacementArchiveLoadsShapesBySequenceAndRejectsInvalidGeometry() throws Exception {
+    var bytes = new ByteArrayOutputStream();
+    try (var zip = new ZipOutputStream(bytes)) {
+      entry(zip, "routes.txt", "route_long_name,route_id,route_short_name\n534UP,r,534\n");
+      entry(zip, "stops.txt", "stop_id,stop_name,stop_lat,stop_lon\ns,Stop,28.6,77.2\nbad,Invalid,NaN,77.2\n");
+      entry(zip, "trips.txt", "trip_id,route_id,shape_id,direction_id\nt,r,valid,0\norphan,missing,invalid,1\n");
+      entry(zip, "stop_times.txt", "trip_id,stop_id,stop_sequence\nt,s,1\n");
+      entry(zip, "shapes.txt", "shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\n"
+          + "valid,28.601,77.2,2\nvalid,28.6,77.2,1\ninvalid,NaN,77.2,1\ninvalid,28.6,77.2,2\n");
+    }
+    var replacement = new TransitIndex();
+    ReflectionTestUtils.setField(replacement, "archive", new ByteArrayResource(bytes.toByteArray()));
+    replacement.load();
+    assertEquals(1, replacement.stops.size());
+    assertEquals(1, replacement.trips.size());
+    assertEquals(28.6, replacement.shapes.get("valid").getFirst().lat());
+    assertFalse(replacement.shapes.containsKey("invalid"));
+    assertEquals(-1, replacement.trips.get("t").visits().getFirst().arrival());
+  }
 }
