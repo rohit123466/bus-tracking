@@ -94,10 +94,20 @@ public class LiveTransitService {
     this.live = live;
   }
 
+  /**
+   * Resolve a vehicle using official GTFS route_id / trip_id only. Neither database
+   * primary keys nor public route numbers are valid vehicle-to-route identifiers.
+   * A trip descriptor that contradicts the static GTFS route or direction fails closed.
+   */
   public TransitIndex.Route route(RealtimeSnapshot.Vehicle v) {
     var trip = index.trips.get(v.tripId());
-    if (trip != null && !v.routeId().isBlank() && !trip.routeId().equals(v.routeId())) return null;
-    return index.routes.get(trip != null ? trip.routeId() : v.routeId());
+    if (trip != null) {
+      if (!v.routeId().isBlank() && !trip.routeId().equals(v.routeId())) return null;
+      if (!trip.direction().isBlank() && !v.direction().isBlank()
+          && !trip.direction().equals(v.direction())) return null;
+    }
+    String officialRouteId = trip != null ? trip.routeId() : v.routeId();
+    return index.routes.get(officialRouteId);
   }
 
   /** Returns the current live vehicle snapshot (unfiltered). */
@@ -121,7 +131,10 @@ public class LiveTransitService {
         : index.routes.values().stream()
             .filter(r -> query.equals(r.number()))
             .map(TransitIndex.Route::id)
+            .distinct()
+            .sorted()
             .toList();
+    Set<String> verifiedRouteIds = Set.copyOf(matchedRouteIds);
     RouteMappingStatus mappingStatus = query.isEmpty() ? RouteMappingStatus.UNKNOWN
         : matchedRouteIds.isEmpty() ? RouteMappingStatus.UNMAPPED : RouteMappingStatus.MAPPED;
 
@@ -139,8 +152,9 @@ public class LiveTransitService {
         unmapped++;
         continue;
       }
-      // Exact match: "106" must not match "106A", "160", or "206".
-      if (!query.isEmpty() && !query.equals(r.number())) continue;
+      // Apply exact official GTFS route_id membership for ANY public route number.
+      // Similar-numbered variants are included only when the official GTFS metadata agrees.
+      if (!query.isEmpty() && !verifiedRouteIds.contains(r.id())) continue;
       if (live.cancelled(v.tripId())) continue;
       inferred |= r.inferred();
       out.add(
