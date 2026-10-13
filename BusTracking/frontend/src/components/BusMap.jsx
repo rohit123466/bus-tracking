@@ -93,9 +93,18 @@ export default function BusMap({
         </Marker>
       )}
 
-      {/* Walking route overlay */}
-      {walkingRoute?.available && (
+      {/* Walking route overlay — solid line when ORS route available, dashed straight-line fallback */}
+      {walkingRoute?.available && walkingRoute.coordinates?.length > 0 && (
         <Polyline positions={walkingRoute.coordinates} pathOptions={{ color: '#16835b', weight: 5 }} />
+      )}
+      {!walkingRoute?.available && walkingRoute?.stop && userLocation && (
+        <Polyline
+          positions={[
+            [userLocation.lat, userLocation.lng],
+            [walkingRoute.stop.lat, walkingRoute.stop.lng],
+          ]}
+          pathOptions={{ color: '#16835b', weight: 3, dashArray: '8 6', opacity: 0.7 }}
+        />
       )}
 
       {/* Route map shapes + stop markers */}

@@ -40,7 +40,9 @@ export default function HomePage() {
   const [nearbyStops, setNearbyStops] = useState([]);
 
   const gps = useUserLocation();
-  const navigation = useWalkingNavigation(setStop, gps.location);
+  // Pass the selected boarding stop as `targetStop` so walking directions
+  // route directly to it instead of hunting for the "nearest" stop.
+  const navigation = useWalkingNavigation(setStop, gps.location, stop);
   const favs = useFavourites();
 
   // ── Route map polyline ──────────────────────────────────────────────────────
@@ -289,37 +291,92 @@ export default function HomePage() {
         {/* Walking navigation — turn-by-turn to the selected stop */}
         <section>
           <h3>Walk to stop</h3>
-          <button onClick={navigation.start} disabled={navigation.active}>
-            🗺️ Get walking directions
-          </button>
-          {navigation.active && (
-            <button onClick={navigation.stop}>Stop navigation</button>
+
+          {/* Context-aware prompt */}
+          {!stop && !navigation.active && (
+            <p style={{ fontSize: 13, color: '#888', margin: '0 0 6px' }}>
+              Select a stop above, then tap below for walking directions.
+            </p>
           )}
-          {navigation.busy && <p role="status">Finding a pedestrian route…</p>}
-          {navigation.error && <p role="alert">{navigation.error}</p>}
-          {navigation.location && (
-            <small>
-              GPS ±{Math.round(navigation.location.accuracy)} m ·{' '}
-              {new Date(navigation.location.timestamp).toLocaleTimeString()}
+          {stop && !navigation.active && (
+            <p style={{ fontSize: 13, color: '#16835b', margin: '0 0 6px' }}>
+              🚏 Walking to: <strong>{stop.name}</strong>
+            </p>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              onClick={navigation.start}
+              disabled={navigation.active || !gps.location}
+              title={!gps.location ? 'Waiting for GPS' : stop ? `Walk to ${stop.name}` : 'Find nearest stop'}
+            >
+              {navigation.active
+                ? '🗺️ Navigating…'
+                : stop
+                  ? `🗺️ Walk to ${stop.name.length > 20 ? stop.name.slice(0, 18) + '…' : stop.name}`
+                  : '🗺️ Find nearest stop'}
+            </button>
+            {navigation.active && (
+              <button onClick={navigation.stop}>✕ Stop</button>
+            )}
+          </div>
+
+          {navigation.busy && <p role="status" style={{ fontSize: 13, color: '#888', marginTop: 4 }}>Finding route…</p>}
+          {navigation.error && <p role="alert" className="transit-warning" style={{ marginTop: 4 }}>{navigation.error}</p>}
+
+          {/* GPS accuracy */}
+          {gps.location && (
+            <small style={{ color: '#aaa', display: 'block', marginTop: 4 }}>
+              GPS ±{Math.round(gps.location.accuracy)} m · {new Date(gps.location.timestamp).toLocaleTimeString()}
             </small>
           )}
+
+          {/* Active navigation result */}
           {navigation.walk && (
-            <div>
-              <strong>{navigation.walk.stop?.name}</strong>
-              <p>{navigation.walk.message}</p>
-              <p>
-                {Math.round(navigation.remaining ?? navigation.walk.distanceMeters ?? 0)} m{' '}
-                {navigation.walk.available ? 'remaining' : '(straight-line)'}
-              </p>
-              {navigation.secondsRemaining != null && (
-                <p>About {Math.ceil(navigation.secondsRemaining / 60)} min walking</p>
+            <div style={{ marginTop: 8, padding: '8px 10px', background: '#f0f8ff', borderRadius: 8, border: '1px solid #c7d2fe' }}>
+              <strong style={{ fontSize: 14 }}>📍 {navigation.walk.stop?.name}</strong>
+
+              {/* Straight-line fallback — still useful even without ORS */}
+              {!navigation.walk.available && navigation.walk.distanceMeters != null && (
+                <div style={{ fontSize: 13, marginTop: 4 }}>
+                  <div style={{ color: '#1a56db', fontWeight: 600 }}>
+                    📏 {Math.round(navigation.walk.distanceMeters)} m away (straight-line)
+                  </div>
+                  <div style={{ color: '#16835b', fontWeight: 600 }}>
+                    🚶 ~{Math.ceil(navigation.walk.distanceMeters / 83)} min walk
+                  </div>
+                  <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+                    {navigation.walk.message}
+                  </div>
+                </div>
               )}
-              {navigation.offRoute
-                ? <p>Off route. Recalculating…</p>
-                : navigation.active && navigation.maneuver && (
-                    <p>↪ {navigation.maneuver.instruction}</p>
-                  )
-              }
+
+              {/* Full pedestrian route available */}
+              {navigation.walk.available && (
+                <>
+                  <div style={{ display: 'flex', gap: 12, fontSize: 13, marginTop: 4 }}>
+                    <span style={{ color: '#1a56db', fontWeight: 600 }}>
+                      📏 {Math.round(navigation.remaining ?? navigation.walk.distanceMeters ?? 0)} m remaining
+                    </span>
+                    {navigation.secondsRemaining != null && (
+                      <span style={{ color: '#16835b', fontWeight: 600 }}>
+                        🚶 ~{Math.ceil(navigation.secondsRemaining / 60)} min
+                      </span>
+                    )}
+                  </div>
+                  {navigation.offRoute
+                    ? <p style={{ fontSize: 12, color: '#c58414', marginTop: 4 }}>⚠️ Off route. Recalculating…</p>
+                    : navigation.active && navigation.maneuver && (
+                        <p style={{ fontSize: 13, marginTop: 4 }}>
+                          ↪ <strong>{navigation.maneuver.instruction}</strong>
+                          {navigation.maneuver.distance > 0 && (
+                            <span style={{ color: '#888' }}> ({Math.round(navigation.maneuver.distance)} m)</span>
+                          )}
+                        </p>
+                      )
+                  }
+                </>
+              )}
             </div>
           )}
         </section>
@@ -327,9 +384,9 @@ export default function HomePage() {
 
       <div className="transit-map">
         <BusMap
-          userLocation={navigation.location ?? gps.location}
+          userLocation={gps.location}
           buses={buses}
-          selectedStop={stop}
+          selectedStop={stop ?? navigation.walk?.stop}
           walkingRoute={navigation.walk}
           routeMap={routeMap}
           nearbyStops={nearbyStops}
