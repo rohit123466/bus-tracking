@@ -28,7 +28,7 @@ import './LiveTransit.css';
 
 export default function HomePage() {
   const [routeNumber, setRouteNumber] = useState('');
-  const [data, setData] = useState({ buses: [], warnings: [] });
+  const [data, setData] = useState({ buses: [], warnings: [], routeMapping: null, feedAvailable: null });
   const [stop, setStop] = useState(null), [destination, setDestination] = useState(null);
   const [arrivals, setArrivals] = useState({ arrivals: [], warnings: [] });
   const [alternatives, setAlternatives] = useState(null);
@@ -59,13 +59,13 @@ export default function HomePage() {
   // ── Live bus polling ────────────────────────────────────────────────────────
   useEffect(() => {
     const ctrl = new AbortController(); let timer;
-    setData({ buses: [], warnings: [] });
+    setData({ buses: [], warnings: [], routeMapping: null, feedAvailable: null });
     const poll = async () => {
       try {
         const result = await transitGet('/buses/live', { routeNumber }, ctrl.signal);
         if (!ctrl.signal.aborted) { setData(result); setUpdated(new Date()); setError(''); }
       } catch {
-        if (!ctrl.signal.aborted) { setData({ buses: [], warnings: [] }); setError('Live bus feed unavailable. Please retry.'); }
+        if (!ctrl.signal.aborted) { setData({ buses: [], warnings: [], routeMapping: null, feedAvailable: false }); setError('Live bus feed unavailable. Please retry.'); }
       } finally {
         if (!ctrl.signal.aborted) timer = setTimeout(poll, 10000);
       }
@@ -176,12 +176,26 @@ export default function HomePage() {
 
         {/* Live bus count */}
         <p role="status">
-          <strong>{buses.length} active bus{buses.length !== 1 ? 'es' : ''}</strong>
+          <strong>{buses.length} recently reported bus{buses.length !== 1 ? 'es' : ''}</strong>
           {routeNumber ? ` on route ${routeNumber}` : ' across mapped routes'}
           {updated && <small> · Updated {updated.toLocaleTimeString()}</small>}
         </p>
-        {!buses.length && routeNumber && (
-          <p>No live buses currently reporting for route {routeNumber}.</p>
+        {routeNumber && data.routeMapping === 'MAPPED' && data.matchedRouteIds?.length > 0 && (
+          <small>Official GTFS route IDs: {data.matchedRouteIds.join(', ')}</small>
+        )}
+        {routeNumber && !error && data.feedAvailable === null && (
+          <p role="status">Checking live positions for route {routeNumber}…</p>
+        )}
+        {routeNumber && !error && data.feedAvailable === false && (
+          <p role="alert">DTC live feed is unavailable or outdated; recent reports may no longer be current.</p>
+        )}
+        {!buses.length && routeNumber && !error && data.feedAvailable === true
+            && data.routeMapping === 'UNMAPPED' && (
+          <p>Official GTFS mapping for route {routeNumber} is unavailable.</p>
+        )}
+        {!buses.length && routeNumber && !error && data.feedAvailable === true
+            && data.routeMapping === 'MAPPED' && (
+          <p>No fresh, verified buses currently reporting for route {routeNumber}.</p>
         )}
         {error && <p role="alert">{error}</p>}
         {data.warnings.map(w => <p className="transit-warning" key={w}>{w}</p>)}
