@@ -129,6 +129,101 @@ public class TransitController {
     return alternatives.alternatives(sourceStopId, destinationStopId, routeNumber);
   }
 
+  /**
+   * Nearest bus stands to the user's GPS location, enriched with:
+   * <ul>
+   *   <li>{@code distanceMeters} — Haversine distance from the user</li>
+   *   <li>{@code walkMinutes} — straight-line walking estimate (5 km/h)</li>
+   *   <li>{@code routeNumbers} — public route numbers that serve this stop</li>
+   *   <li>{@code liveCount} — number of fresh vehicles currently approaching</li>
+   * </ul>
+   * Results are sorted nearest-first. {@code limit} is capped at 20.
+   * This uses the GTFS static index so it is always available regardless of
+   * live feed state.
+   */
+  public record NearbyStop(
+      String id,
+      String name,
+      double lat,
+      double lng,
+      double distanceMeters,
+      double walkMinutes,
+      List<String> routeNumbers,
+      int liveCount) {}
+
+  public record NearbyStopsResult(
+      List<NearbyStop> stops,
+      double radiusMeters,
+      boolean feedAvailable) {}
+
+  @GetMapping("/stops/nearby")
+  public NearbyStopsResult nearbyStops(
+      @RequestParam double latitude,
+      @RequestParam double longitude,
+      @RequestParam(defaultValue = "1000") double radiusMeters,
+      @RequestParam(defaultValue = "5") int limit) {
+    coordinates(latitude, longitude);
+    double radius = Math.max(100, Math.min(5000, radiusMeters));
+    int cap = Math.min(limit, 20);
+
+    // 1. Get stops within radius from GTFS spatial index, already sorted nearest-first
+    List<TransitIndex.Stop> raw = index.nearby(latitude, longitude, radius);
+
+    // 2. For live counts: snapshot of fresh vehicles grouped by which stops they serve
+    //    We compute this once here rather than calling arrivals() per stop (which would be O(n*m))
+    Map<String, Integer> liveAtStop = new HashMap<>();
+    for (var v : transit.liveVehicles()) {
+      if (!RealtimeSnapshot.fresh(v.timestamp())) continue;
+      var route = transit.route(v);
+      if (route == null) continue;
+      for (String stopId : index.routesAtStop.keySet()) {
+        if (index.routesAtStop.get(stopId).contains(route.id())) {
+          // Only count if the bus is plausibly approaching: it hasn't passed the stop yet
+          // (stop sequence >= bus current sequence, or sequence unknown)
+          var trip = index.trips.get(v.tripId());
+          if (trip != null && v.sequence() != null) {
+            boolean stopIsAhead = trip.visits().stream()
+                .anyMatch(vis -> vis.stopId().equals(stopId) && vis.sequence() >= v.sequence());
+            if (!stopIsAhead) continue;
+          }
+          liveAtStop.merge(stopId, 1, Integer::sum);
+        }
+      }
+    }
+
+    boolean feedAvailable = transit.feedAvailable();
+
+    // 3. Build enriched NearbyStop records
+    List<NearbyStop> result = raw.stream()
+        .limit(cap)
+        .map(s -> {
+          double dist = Geometry.distance(latitude, longitude, s.lat(), s.lng());
+          double walkMin = dist / (5000.0 / 60.0); // 5 km/h walking speed
+
+          // Collect distinct public route numbers for this stop
+          List<String> routeNums = index.routesAtStop
+              .getOrDefault(s.id(), Set.of())
+              .stream()
+              .map(routeId -> index.routes.get(routeId))
+              .filter(Objects::nonNull)
+              .map(TransitIndex.Route::number)
+              .filter(Objects::nonNull)
+              .distinct()
+              .sorted()
+              .toList();
+
+          int live = liveAtStop.getOrDefault(s.id(), 0);
+          return new NearbyStop(
+              s.id(), s.name(), s.lat(), s.lng(),
+              Math.round(dist * 10.0) / 10.0,
+              Math.round(walkMin * 10.0) / 10.0,
+              routeNums, live);
+        })
+        .toList();
+
+    return new NearbyStopsResult(result, radius, feedAvailable);
+  }
+
   @GetMapping("/stops/nearest")
   public WalkingService.Walk nearest(
       @RequestParam double latitude, @RequestParam double longitude) {

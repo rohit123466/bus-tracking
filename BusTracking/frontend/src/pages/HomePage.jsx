@@ -16,6 +16,7 @@ import SearchBar from '../components/SearchBar';
 import TransitStopPicker from '../components/TransitStopPicker';
 import ArrivalCards from '../components/ArrivalCards';
 import NearbyLiveBuses from '../components/NearbyLiveBuses';
+import NearestBusStand from '../components/NearestBusStand';
 import FavouritesPanel from '../components/FavouritesPanel';
 import ServiceAlertsPanel from '../components/ServiceAlertsPanel';
 import { transitGet, getServiceAlerts } from '../api/client';
@@ -36,6 +37,7 @@ export default function HomePage() {
   const [alertsResult, setAlertsResult] = useState(null);
   const [showFavs, setShowFavs] = useState(false);
   const [showNearby, setShowNearby] = useState(true);
+  const [nearbyStops, setNearbyStops] = useState([]);
 
   const gps = useUserLocation();
   const navigation = useWalkingNavigation(setStop, gps.location);
@@ -198,7 +200,17 @@ export default function HomePage() {
           />
         )}
 
-        {/* Nearby Live Buses (Feature 1) */}
+        {/* Nearest Bus Stands — auto-triggers on GPS, shows stops sorted nearest-first */}
+        <section>
+          <NearestBusStand
+            userLocation={gps.location}
+            onSelectStop={handleSelectStop}
+            onStopsFound={setNearbyStops}
+            selectedStopId={stop?.id}
+          />
+        </section>
+
+        {/* Nearby Live Buses */}
         <section>
           <button className="fav-toggle" onClick={() => setShowNearby(v => !v)}>
             📡 Nearby Live Buses {showNearby ? '▲' : '▼'}
@@ -274,11 +286,11 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* Walking navigation */}
+        {/* Walking navigation — turn-by-turn to the selected stop */}
         <section>
-          <h3>Walk to a bus stop</h3>
+          <h3>Walk to stop</h3>
           <button onClick={navigation.start} disabled={navigation.active}>
-            Find Nearest Bus Stop
+            🗺️ Get walking directions
           </button>
           {navigation.active && (
             <button onClick={navigation.stop}>Stop navigation</button>
@@ -297,15 +309,15 @@ export default function HomePage() {
               <p>{navigation.walk.message}</p>
               <p>
                 {Math.round(navigation.remaining ?? navigation.walk.distanceMeters ?? 0)} m{' '}
-                {navigation.walk.available ? 'walking distance remaining' : '(straight-line distance)'}
+                {navigation.walk.available ? 'remaining' : '(straight-line)'}
               </p>
               {navigation.secondsRemaining != null && (
-                <p>About {Math.ceil(navigation.secondsRemaining / 60)} minutes walking</p>
+                <p>About {Math.ceil(navigation.secondsRemaining / 60)} min walking</p>
               )}
               {navigation.offRoute
-                ? <p>Off route. Recalculating when GPS is accurate…</p>
+                ? <p>Off route. Recalculating…</p>
                 : navigation.active && navigation.maneuver && (
-                    <p>Next: {navigation.maneuver.instruction}</p>
+                    <p>↪ {navigation.maneuver.instruction}</p>
                   )
               }
             </div>
@@ -320,6 +332,7 @@ export default function HomePage() {
           selectedStop={stop}
           walkingRoute={navigation.walk}
           routeMap={routeMap}
+          nearbyStops={nearbyStops}
           onSelectStop={handleSelectStop}
         />
       </div>
