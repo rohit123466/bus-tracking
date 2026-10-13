@@ -215,6 +215,74 @@ class LiveTransitTest {
     assertEquals(2, service.buses("534").buses().size());
   }
 
+  @Test void nearbyBusesFilteredByRadius() {
+    // bus "a" at 28.6 = ~111m from 28.601; bus "b" at 28.7 = ~11km away
+    feed(vehicle("a", "1824", "t", now, 28.6), vehicle("b", "1824", "", now, 28.7));
+    var result = service.nearbyBuses(28.601, 77.2, 500, "");
+    assertEquals(1, result.buses().size(), "Only the close bus must be within 500m radius");
+    assertEquals("a", result.buses().get(0).vehicleId());
+  }
+
+  @Test void nearbyBusesNearestFirst() {
+    // bus "far" is 550m away, bus "close" is ~111m
+    feed(vehicle("far", "1824", "", now, 28.606), vehicle("close", "1824", "", now, 28.602));
+    var result = service.nearbyBuses(28.601, 77.2, 2000, "");
+    assertEquals("close", result.buses().get(0).vehicleId(), "Nearest bus must come first");
+  }
+
+  @Test void nearbyBusesRouteFilter() {
+    index.routes.put("alt", new TransitIndex.Route("alt", "600", "600UP", "UP", false));
+    feed(vehicle("on534", "1824", "", now, 28.601), vehicle("on600", "alt", "", now, 28.601));
+    assertEquals(1, service.nearbyBuses(28.601, 77.2, 2000, "534").buses().size());
+    assertEquals("on534", service.nearbyBuses(28.601, 77.2, 2000, "534").buses().get(0).vehicleId());
+  }
+
+  @Test void nearbyBusesRadiusClamped() {
+    // radius below 500m should be clamped to 500m
+    var result = service.nearbyBuses(28.601, 77.2, 100, "");
+    assertEquals(500, result.radiusMeters(), "Radius below 500m must be clamped to 500");
+    // radius above 10km should be clamped to 10000m
+    var result2 = service.nearbyBuses(28.601, 77.2, 99999, "");
+    assertEquals(10000, result2.radiusMeters(), "Radius above 10km must be clamped to 10000");
+  }
+
+  @Test void remainingStopsPopulatedWhenSequenceKnown() {
+    // bus at sequence=1 (at stop "s"), stop "d" is sequence=2 → 0 intermediate stops
+    FeedEntity busWithSeq = FeedEntity.newBuilder().setId("seq")
+        .setVehicle(VehiclePosition.newBuilder()
+            .setVehicle(VehicleDescriptor.newBuilder().setId("seq"))
+            .setTrip(TripDescriptor.newBuilder().setRouteId("1824").setTripId("t").setDirectionId(0))
+            .setPosition(Position.newBuilder().setLatitude(28.601f).setLongitude(77.2f).setSpeed(5))
+            .setTimestamp(now).setCurrentStopSequence(1))
+        .build();
+    feed(busWithSeq, update("seq", 5, 10));
+    var arrivals = service.arrivals("d").arrivals();
+    assertFalse(arrivals.isEmpty());
+    // remainingStops = 0 because bus is at seq 1, target is seq 2, no stops between
+    assertEquals(0, arrivals.get(0).remainingStops(), "Zero stops between current and target");
+  }
+
+  @Test void liveBusResultCarriesSpeedKmh() {
+    feed(vehicle("v1", "1824", "t", now, 28.601));
+    var buses = service.buses("534").buses();
+    assertEquals(1, buses.size());
+    // speed was set to 5 m/s in vehicle() helper = 18 km/h
+    assertNotNull(buses.get(0).speedKmh(), "speedKmh must be populated when feed provides speed");
+    assertTrue(buses.get(0).speedKmh() > 0, "speedKmh must be positive");
+  }
+
+  @Test void routeMappingStatusReflectsGtfsData() {
+    // Known route → MAPPED
+    assertEquals(LiveTransitService.RouteMappingStatus.MAPPED,
+        service.buses("534").routeMapping());
+    // Unknown route → UNMAPPED
+    assertEquals(LiveTransitService.RouteMappingStatus.UNMAPPED,
+        service.buses("999").routeMapping());
+    // Blank → UNKNOWN
+    assertEquals(LiveTransitService.RouteMappingStatus.UNKNOWN,
+        service.buses("").routeMapping());
+  }
+
   FeedEntity timedTrip(String vehicle, String trip, String first, int firstMinutes,
       String last, int lastMinutes) {
     var entity = update(vehicle, firstMinutes, lastMinutes).toBuilder();

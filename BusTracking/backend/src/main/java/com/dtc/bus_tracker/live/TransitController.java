@@ -13,22 +13,42 @@ public class TransitController {
   private final LiveTransitService transit;
   private final WalkingService walking;
   private final AlternativeService alternatives;
+  private final ServiceAlertService alerts;
 
   public TransitController(
       TransitIndex index,
       LiveTransitService transit,
       WalkingService walking,
-      AlternativeService alternatives) {
+      AlternativeService alternatives,
+      ServiceAlertService alerts) {
     this.index = index;
     this.transit = transit;
     this.walking = walking;
     this.alternatives = alternatives;
+    this.alerts = alerts;
   }
 
   @GetMapping("/buses/live")
   public LiveTransitService.LiveResult buses(@RequestParam(defaultValue = "") String routeNumber) {
     query(routeNumber);
     return transit.buses(routeNumber);
+  }
+
+  /**
+   * Returns all GTFS-verified live buses within {@code radiusMeters} of the user's GPS position,
+   * sorted nearest-first. Optional {@code routeNumber} narrows results to a single route.
+   * This is the GTFS-realtime equivalent of the legacy {@code /api/buses/nearby} endpoint;
+   * the two must remain separate business functions (nearby vs. route-search).
+   */
+  @GetMapping("/buses/nearby")
+  public LiveTransitService.NearbyResult nearbyBuses(
+      @RequestParam double latitude,
+      @RequestParam double longitude,
+      @RequestParam(defaultValue = "2000") double radiusMeters,
+      @RequestParam(defaultValue = "") String routeNumber) {
+    coordinates(latitude, longitude);
+    query(routeNumber);
+    return transit.nearbyBuses(latitude, longitude, radiusMeters, routeNumber);
   }
 
   @GetMapping("/routes/search")
@@ -121,6 +141,14 @@ public class TransitController {
       @RequestParam double startLat, @RequestParam double startLon, @RequestParam String stopId) {
     coordinates(startLat, startLon);
     return walking.route(startLat, startLon, transit.stop(stopId));
+  }
+
+  /** Service alerts for the current snapshot — filtered to a route when provided. */
+  @GetMapping("/alerts")
+  public ServiceAlertService.AlertsResult serviceAlerts(
+      @RequestParam(defaultValue = "") String routeNumber) {
+    query(routeNumber);
+    return alerts.alerts(routeNumber);
   }
 
   private static void query(String q) {

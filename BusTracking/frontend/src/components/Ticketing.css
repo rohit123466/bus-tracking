@@ -1094,3 +1094,16 @@
     align-items: baseline;
   }
 }
+
+/* ── Demo QR code (Feature 14) ─────────────────────── */
+.qr-demo-section{margin-top:8px;border-top:1px solid var(--border,#eee);padding-top:6px}
+.qr-demo-toggle{cursor:pointer;font-size:12px;color:var(--accent,#1a56db);list-style:none}
+.qr-demo-toggle::-webkit-details-marker{display:none}
+.qr-demo-body{margin-top:6px}
+.qr-demo-visual{background:#f5f5f5;border-radius:6px;padding:10px;overflow:auto}
+.qr-payload{font-size:10px;word-break:break-all;color:#333}
+.qr-disclaimer{font-size:11px;color:#c58414;margin:4px 0 0;border-left:3px solid #f9d45a;padding-left:6px}
+/* ── Crowding badge (Feature 12) ───────────────────── */
+.crowd-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600}
+.crowd-low{background:#d1fae5;color:#065f46}.crowd-moderate{background:#fef9c3;color:#7a4f00}
+.crowd-high{background:#fee2e2;color:#991b1b}.crowd-unknown{background:#f3f4f6;color:#6b7280}

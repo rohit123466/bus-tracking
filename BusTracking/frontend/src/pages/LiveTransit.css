@@ -1,2 +1,48 @@
 .live-transit{display:grid;grid-template-columns:minmax(290px,360px) 1fr;height:100%;min-height:0}.transit-panel{padding:18px;overflow:auto;background:var(--bg,#fff);border-right:1px solid var(--border,#ddd)}.transit-panel h2{margin-top:0}.transit-panel section{border-top:1px solid var(--border,#ddd);margin-top:16px;padding-top:8px}.transit-panel small{display:block;margin:5px 0}.transit-panel .search-bar{position:relative;top:auto;left:auto;transform:none;width:100%;max-width:none;z-index:500}.transit-panel input,.transit-panel select{box-sizing:border-box;max-width:100%;width:100%;padding:10px;margin:5px 0}.transit-panel button{padding:10px;margin:4px 5px 4px 0;cursor:pointer}.transit-picker{display:block;margin:15px 0;font-weight:600}.transit-warning{font-size:12px;border-left:3px solid #c58414;padding-left:8px}.arrival-card{border:1px solid var(--border,#ddd);border-radius:8px;padding:10px;margin:8px 0;font-size:13px}.transit-map{min-height:300px}.transit-panel .search-results{max-height:230px;overflow:auto}@media(max-width:700px){.live-transit{grid-template-columns:1fr;grid-template-rows:45% 55%}.transit-panel{grid-row:2;border-top:1px solid #ddd}.transit-map{grid-row:1;min-height:0}}
 .stop-autocomplete{position:relative;font-weight:400}.stop-suggestions{position:absolute;top:100%;left:0;right:0;z-index:600;background:var(--bg,#fff);border:1px solid var(--border,#ddd);border-radius:8px;box-shadow:0 6px 18px #0002;max-height:240px;overflow-y:auto}.stop-suggestions ul{list-style:none;margin:0;padding:4px}.stop-suggestions li{padding:10px;border-radius:5px;cursor:pointer}.stop-suggestions li[aria-selected=true]{background:#eaf2ff;color:#123a73}.stop-suggestions small{font-weight:400;opacity:.75}.stop-suggestions p{padding:10px;margin:0;font-size:13px}
+
+/* ── Nearby live buses ──────────────────────────── */
+.nearby-buses{margin:10px 0}
+.nearby-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.nearby-radius-select{padding:4px 8px;border-radius:6px;border:1px solid var(--border,#ddd);font-size:13px}
+.nearby-bus-list{list-style:none;margin:0;padding:0}
+.nearby-bus-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1px solid var(--border,#ddd);border-radius:8px;margin:4px 0;cursor:pointer;font-size:13px;transition:background .15s}
+.nearby-bus-item:hover{background:#eaf2ff}
+.nearby-route-badge{background:#4e8cff;color:#fff;padding:2px 8px;border-radius:10px;font-weight:700;font-size:12px}
+.nearby-dist{color:#1a56db;font-weight:600;min-width:50px}
+.nearby-dir{color:#16835b;font-size:12px}
+.nearby-speed{color:#888;font-size:12px}
+.nearby-age{color:#aaa;font-size:11px;margin-left:auto}
+.nearby-hint{color:#888;font-size:13px}
+/* ── Arrival cards (enhanced) ──────────────────── */
+.arrival-card-rich{border-left:3px solid #4e8cff}
+.arrival-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.arrival-route{font-weight:700;font-size:14px}
+.arrival-eta{background:#4e8cff;color:#fff;padding:2px 10px;border-radius:10px;font-size:13px;font-weight:700}
+.arrival-eta-unknown{background:#ddd;color:#666}
+.arrival-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#555;margin:3px 0}
+.arrival-confidence{font-size:12px;margin-top:3px}
+.arrival-gps{color:#aaa}
+.arrival-reason{color:#888}
+.arrival-empty{color:#888;font-size:13px}
+.arrival-section{margin-top:4px}
+/* ── Notification controls ─────────────────────── */
+.notif-controls{margin:6px 0 4px;display:flex;flex-direction:column;gap:3px}
+.notif-btn{background:#4e8cff;color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px}
+.notif-off-btn{background:#e0e0e0;color:#333;margin-left:6px}
+.notif-on{font-size:13px;display:flex;align-items:center;gap:4px}
+.notif-threshold{padding:2px 6px;border-radius:6px;border:1px solid #ddd;font-size:12px}
+.notif-disclaimer{font-size:11px;color:#888}
+/* ── Service alerts ────────────────────────────── */
+.alerts-panel{margin:6px 0}
+.alert-card{display:flex;gap:8px;padding:8px 10px;border-radius:8px;margin:4px 0;font-size:13px;border:1px solid transparent}
+.alert-critical{background:#fff0f0;border-color:#ffaaaa}
+.alert-warning{background:#fffbe6;border-color:#f9d45a}
+.alert-info{background:#f0f8ff;border-color:#a0c8ff}
+.alert-icon{font-size:16px;flex-shrink:0}
+.alert-body p{margin:2px 0}
+.alert-route{font-weight:600;color:#1a56db}
+.alert-demo{color:#aaa;font-size:11px}
+/* ── Favourites collapse toggle ────────────────── */
+.fav-toggle{background:none;border:none;cursor:pointer;font-size:13px;color:var(--accent,#1a56db);padding:4px 0;text-align:left;display:flex;align-items:center;gap:5px;width:100%}
+.fav-toggle:hover{text-decoration:underline}
