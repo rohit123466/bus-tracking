@@ -49,7 +49,7 @@ Evaluation is triggered when the earliest displayed prediction exceeds 15 minute
 
 OpenRouteService `POST /v2/directions/foot-walking/geojson` runs server-side; the API key is never sent to React. Provider geometry and instructions are used verbatim. Driving profiles are rejected. Nearby stops use a spatial grid. Candidates within 2 km are ordered by straight-line lower bounds, then walking distances are compared; evaluation stops when the next lower bound cannot beat the best route. At most eight external routes are checked. Partial searches are explicitly labeled “closest verified” rather than claiming a global nearest stop.
 
-A bounded 30-second in-memory cache, timeouts and a failure cooldown limit provider calls. GPS is not persisted. `watchPosition()` starts only on button click and is cleared on stop/unmount. Navigation pauses directions on poor accuracy (>50 m), updates remaining polyline distance locally, detects deviation above max(35 m, twice GPS accuracy), and reroutes at most every 30 seconds. Missing provider credentials/errors return straight-line distance with reachability unknown, no walking ETA and no fabricated turns.
+A bounded 30-second in-memory cache, timeouts and a failure cooldown limit provider calls. GPS is not persisted. The homepage starts one `watchPosition()` automatically and clears it on unmount; stopping navigation retains GPS. Navigation pauses directions on poor accuracy (>50 m), updates remaining polyline distance locally, detects deviation above max(35 m, twice GPS accuracy), and reroutes at most every 30 seconds. Missing provider credentials/errors return straight-line distance with reachability unknown, no walking ETA and no fabricated turns.
 
 ## Configuration
 
@@ -64,6 +64,12 @@ A bounded 30-second in-memory cache, timeouts and a failure cooldown limit provi
 | `JWT_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Existing security settings for admin/conductor |
 
 Use a GTFS static feed and realtime feed from compatible versions. Updating the static archive requires a backend restart. The new full-feed index is in memory and does not alter/migrate existing route IDs or ticket data. `GTFS_RESOURCE` affects the new live index; legacy database import remains separately configured. `--gtfs.import.enabled=false` can skip that legacy import for live-API development. Do not use that option if you need a newly populated legacy route database.
+
+For a fresh legacy database, `GTFS_IMPORT_RESOURCE=file:C:/data/GTFS.zip` selects its archive separately. CSV columns are read by header name. Existing relational records are deliberately not replaced; preserve ticket/route IDs through a reviewed migration. Initial imports now roll back together on failure and may be retried. Blank optional stop times remain available in the full live index but cannot enter the legacy non-null LocalTime schema.
+
+### Data integrity corrections (2026-10-13)
+
+Vehicle GPS timestamps must be present; a feed header is not a GPS measurement time. Explicit zero speed remains stopped. TripUpdates must agree on route, direction, stop and service date/start time; unsupported or conflicting instances do not produce predictions. Cancellations expire with their timestamp. Missing TripUpdates and provider failures are visible. Arrival responses add direction and GPS coordinates, while alternatives add named stops and walking distance. The UI expires markers independently of polling and labels ticket occupancy as demo. See FINAL_VERIFICATION.md for this task's executed checks; older results below are historical.
 
 ## Windows development and Maven repair
 
