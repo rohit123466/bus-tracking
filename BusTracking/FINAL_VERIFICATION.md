@@ -158,3 +158,10 @@ See the exact list appended below (paths relative to repository root).
 - BusTracking/LIVE_TRANSIT.md
 - feed_check.pb
 - render.yaml
+
+### Walking navigation follow-up
+- COMPLETE: delayed GPS automatically resumes nearest-stop lookup; approximate GPS permits provisional stop discovery without turn instructions; retry remains available; timed retries no longer depend on GPS movement.
+- COMPLETE: unavailable pedestrian routing shows a labelled dashed straight-line connection; no-stop results no longer display a fabricated zero-metre distance.
+- Verification: frontend lint/build passed; 11 existing mock browser scenarios passed; tests/walking-fallback.mjs passed against the running backend with simulated delayed/coarse GPS.
+- BLOCKED: street-level pedestrian directions require ORS_API_KEY. The supplied DTC credential is active only in the running backend environment and was not changed or committed.
+

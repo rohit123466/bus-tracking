@@ -49,6 +49,11 @@ export default function BusMap({ userLocation, buses, selectedRoute, onSelectSto
 
       {userLocation?.accuracy && <Circle center={[userLocation.lat, userLocation.lng]} radius={userLocation.accuracy} pathOptions={{ color: "#3388ff", weight: 1 }} />}
       {selectedStop && <Marker position={[selectedStop.lat, selectedStop.lng]} icon={stopIconFor(selectedStop.name)}><Popup>{selectedStop.name}</Popup></Marker>}
+      {walkingRoute?.stop && !walkingRoute.available && userLocation && <Polyline
+        positions={[[userLocation.lat, userLocation.lng], [walkingRoute.stop.lat, walkingRoute.stop.lng]]}
+        pathOptions={{ color: '#777', weight: 3, dashArray: '6 8' }}>
+        <Popup>Straight-line connection only. Pedestrian access is unverified.</Popup>
+      </Polyline>}
       {walkingRoute?.available && <Polyline positions={walkingRoute.coordinates} pathOptions={{ color: "#16835b", weight: 5 }} />}
 
       {routeMap?.shapes?.map((points, i) => <Polyline key={i} positions={points.map(p => [p.lat, p.lng])} pathOptions={{ color: "#aa3bff", weight: 3 }} />)}

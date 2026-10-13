@@ -99,13 +99,13 @@ export default function HomePage() {
         </article>)}
       </section>}
       <section><h3>Walk to a bus stop</h3>
-        <button onClick={navigation.start} disabled={navigation.active}>Find Nearest Bus Stop</button>
+        <button onClick={navigation.start} disabled={navigation.busy}>Find Nearest Bus Stop</button>
         {navigation.active && <button onClick={navigation.stop}>Stop navigation</button>}
         {navigation.busy && <p role="status">Finding a pedestrian route…</p>}
         {navigation.error && <p role="alert">{navigation.error}</p>}
         {navigation.location && <small>GPS accuracy ±{Math.round(navigation.location.accuracy)} m · {new Date(navigation.location.timestamp).toLocaleTimeString()}</small>}
         {navigation.walk && <div><strong>{navigation.walk.stop?.name}</strong><p>{navigation.walk.message}</p>
-          <p>{Math.round(navigation.remaining ?? navigation.walk.distanceMeters ?? 0)} m {navigation.walk.available ? 'walking distance remaining' : '(straight-line distance)'}</p>
+          {navigation.walk.stop && <p>{Math.round(navigation.remaining ?? navigation.walk.distanceMeters)} m {navigation.walk.available ? 'walking distance remaining' : '(straight-line distance; pedestrian access unverified)'}</p>}
           {navigation.secondsRemaining != null && <p>About {Math.ceil(navigation.secondsRemaining / 60)} minutes walking</p>}
           {navigation.offRoute ? <p>Off route. Recalculating when GPS is accurate…</p> : navigation.active && navigation.maneuver && <p>Next: {navigation.maneuver.instruction}</p>}
         </div>}
