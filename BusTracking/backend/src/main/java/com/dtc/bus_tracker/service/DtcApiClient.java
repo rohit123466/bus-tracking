@@ -19,15 +19,32 @@ public class DtcApiClient {
     public DtcApiClient(com.dtc.bus_tracker.live.RealtimeSnapshot snapshot) { this.snapshot = snapshot; }
     @Value("${dtc.trip-updates.url:}") private String tripUpdatesUrl;
 
-    @Value("${dtc.api.url}")
+    @Value("${dtc.api.url:https://otd.delhi.gov.in/api/realtime/VehiclePositions.pb}")
     private String apiUrl;
 
-    @Value("${dtc.api.key}")
+    @Value("${dtc.api.key:}")
     private String apiKey;
 
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(8)).build();
 
-    public List<BusLocationEvent> fetchVehiclePositions() throws Exception {
+    public synchronized List<BusLocationEvent> fetchVehiclePositions() throws Exception {
+        try {
+            return fetch();
+        } catch (Exception failure) {
+            // Never expose request URLs: the provider authenticates with a query parameter.
+            snapshot.feedError = failure instanceof FeedResponseException ? failure.getMessage() : failure instanceof com.google.protobuf.InvalidProtocolBufferException
+                    ? "DTC returned a malformed GTFS realtime feed."
+                    : "DTC feed request failed (" + failure.getClass().getSimpleName() + "). Check connectivity and credentials.";
+            if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new IllegalStateException(snapshot.feedError);
+        }
+    }
+
+    private static class FeedResponseException extends RuntimeException {
+        FeedResponseException(String message) { super(message); }
+    }
+
+    private List<BusLocationEvent> fetch() throws Exception {
         if (apiKey.isBlank() || apiKey.equals("YOUR_LOCAL_KEY")) { snapshot.feedError = "DTC_API_KEY is not configured; live positions are unavailable."; return List.of(); }
         String url = apiUrl + (apiUrl.contains("?") ? "&" : "?") + "key=" + java.net.URLEncoder.encode(apiKey, java.nio.charset.StandardCharsets.UTF_8);
 
@@ -40,7 +57,7 @@ public class DtcApiClient {
         HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
 
         if (response.statusCode() != 200 || response.body() == null || response.body().length == 0) {
-            throw new RuntimeException("DTC API returned invalid response: status=" + response.statusCode());
+            throw new FeedResponseException("DTC API returned HTTP " + response.statusCode() + (response.statusCode() == 401 || response.statusCode() == 403 ? "; check DTC_API_KEY authorization." : "; live positions unavailable."));
         }
 
         FeedMessage feed = FeedMessage.parseFrom(response.body());
@@ -53,26 +70,13 @@ public class DtcApiClient {
             } catch (Exception ignored) { /* existing predictions expire after 120s */ }
         }
         List<BusLocationEvent> events = new ArrayList<>();
-        for (var entity : feed.getEntityList()) {
-            if (!entity.hasVehicle()) continue;
-            var v = entity.getVehicle();
-
-            String vehicleId = v.getVehicle().getId();
-            if (vehicleId.isBlank() || !v.hasPosition()) continue;
-            var position = v.getPosition();
-            Boolean wheelchairSpaceAvailable = null; // Occupancy is unknown unless the feed supplies it.
-
+        for (var v : snapshot.vehicles().values()) {
+            if (!com.dtc.bus_tracker.live.RealtimeSnapshot.fresh(v.timestamp())) continue;
             events.add(BusLocationEvent.builder()
-                    .vehicleId(vehicleId)
-                    .latitude((double) position.getLatitude())
-                    .longitude((double) position.getLongitude())
-                    .routeId(v.getTrip().getRouteId())
-                    .timestamp(v.getTimestamp())
-                    // GTFS-RT reports speed in m/s per spec; convert to km/h for display.
-                    .speedKmh(position.hasSpeed() ? position.getSpeed() * 3.6 : null)
-                    .bearing(position.hasBearing() ? (double) position.getBearing() : null)
-                    .wheelchairSpaceAvailable(wheelchairSpaceAvailable)
-                    .build());
+                    .vehicleId(v.id()).latitude(v.lat()).longitude(v.lng())
+                    .routeId(v.routeId()).timestamp(v.timestamp())
+                    .speedKmh(v.speedKmh()).bearing(v.bearing())
+                    .wheelchairSpaceAvailable(null).build());
         }
         return events;
     }

@@ -48,6 +48,11 @@ public class RealtimeSnapshot {
     return cancelled.contains(tripId);
   }
 
+  /** Returns the current set of cancelled trip IDs from the latest TripUpdates feed. */
+  public Set<String> cancelledTrips() {
+    return cancelled;
+  }
+
   public static boolean fresh(long stamp) {
     long age = Instant.now().getEpochSecond() - stamp;
     return stamp > 0 && age >= -30 && age <= 120;
@@ -140,7 +145,8 @@ public class RealtimeSnapshot {
     if (updateVehicles) {
       vehicles = Map.copyOf(next);
       fetchedAt = Instant.now().getEpochSecond();
-      feedError = null;
+      feedError = !next.isEmpty() && next.values().stream().noneMatch(v -> fresh(v.timestamp()))
+          ? "DTC feed contains no fresh vehicle positions." : null;
     }
     if (updateTrips || hasUpdates) {
       predictions = Map.copyOf(times);

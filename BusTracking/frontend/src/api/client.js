@@ -148,3 +148,22 @@ export default client;
 // Full-feed rider API uses GTFS string IDs, not legacy database IDs.
 export const transitGet = (path, params = {}, signal) =>
   client.get(`/transit${path}`, { params, signal, timeout: 90000 }).then(res => res.data);
+
+/** GET /api/transit/buses/nearby — GTFS-verified live buses near a GPS point */
+export const getNearbyLiveBuses = (lat, lng, radiusMeters = 2000, routeNumber = '') =>
+  transitGet('/buses/nearby', { latitude: lat, longitude: lng, radiusMeters, routeNumber });
+
+/** GET /api/transit/stops/nearby — enriched nearest bus stands with routes + live count */
+export const getNearbyGtfsStops = (lat, lng, radiusMeters = 1000, limit = 5) =>
+  transitGet('/stops/nearby', { latitude: lat, longitude: lng, radiusMeters, limit });
+
+/** GET /api/transit/alerts — service alerts, optionally filtered to a route */
+export const getServiceAlerts = (routeNumber = '') =>
+  transitGet('/alerts', { routeNumber });
+
+/** POST /api/journey/plan with preference */
+export const planJourneyWithPreference = (srcLat, srcLng, dstLat, dstLng, preference = 'FASTEST') =>
+  client
+    .post('/journey/plan', { sourceLat: srcLat, sourceLng: srcLng, destinationLat: dstLat, destinationLng: dstLng },
+      { params: { preference } })
+    .then((res) => res.data);

@@ -38,3 +38,11 @@ body,
 * {
   box-sizing: border-box;
 }
+
+/* ── Selected bus marker highlight ──────────────── */
+.bus-marker-selected .bus-chip-selected {
+  background: #ff6b00 !important;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 3px #ff6b0066;
+  transform: scale(1.2);
+}

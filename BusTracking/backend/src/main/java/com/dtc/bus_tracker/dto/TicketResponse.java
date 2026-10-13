@@ -40,4 +40,12 @@ public class TicketResponse {
     private LocalDateTime issuedAt;
     private LocalDateTime completedAt;
     private String issuedBy;
+    /**
+     * Base64-encoded PNG QR code payload for demo display.
+     * Format: {@code DTCTICKET:{ticketNumber}:{busNumber}:{seatNumber}:{fromStop}:{toStop}:{issuedAtEpoch}}
+     * This QR code is a DEMO feature only and is not accepted by DTC or any official system.
+     */
+    private String qrCodeBase64;
+    /** Human-readable disclaimer shown alongside the QR code. */
+    private String qrDisclaimer;
 }

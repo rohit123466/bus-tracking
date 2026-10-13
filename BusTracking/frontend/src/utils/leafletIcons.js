@@ -77,3 +77,19 @@ export function busIcon(routeCode) {
   }
   return icon;
 }
+
+/** Highlighted variant of busIcon for the selected bus (Feature 6). */
+export function selectedBusIcon(routeCode) {
+  const key = '★' + (routeCode ?? '?');
+  let icon = busIconCache.get(key);
+  if (!icon) {
+    icon = L.divIcon({
+      className: 'bus-marker bus-marker-selected',
+      html: `<div class="bus-chip bus-chip-selected" role="img" aria-label="Selected bus on route ${escapeHtml(routeCode ?? '?')}">${escapeHtml(routeCode ?? '?')}</div>`,
+      iconSize: [38, 24],
+      iconAnchor: [19, 12],
+    });
+    busIconCache.set(key, icon);
+  }
+  return icon;
+}

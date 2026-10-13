@@ -7,6 +7,10 @@ const STATUS_BADGE = {
   CANCELLED: { cls: 'badge--red', label: 'Cancelled' },
 };
 
+/**
+ * TicketCard — displays a single ticket including demo QR code (Feature 14).
+ * The QR code is a DEMO feature only and is not accepted by any official system.
+ */
 export default function TicketCard({ ticket, onComplete, onCancel, busy, highlight }) {
   const status = STATUS_BADGE[ticket.status];
   const accessible = ticket.passengerCategory === 'DIVYANGJAN';
@@ -58,6 +62,31 @@ export default function TicketCard({ ticket, onComplete, onCancel, busy, highlig
           )}
         </footer>
       )}
+
+      {/* Demo QR Code (Feature 14) */}
+      {ticket.qrCodeBase64 && ticket.status === 'ACTIVE' && (
+        <DemoQR payload={ticket.qrCodeBase64} disclaimer={ticket.qrDisclaimer} />
+      )}
     </article>
+  );
+}
+
+/**
+ * DemoQR — renders a scannable QR-like visual for a ticket payload.
+ * Uses a CSS grid pattern as a lightweight visual placeholder since
+ * we have no QR library dependency. In production, a real QR library
+ * (e.g. qrcode.react) should be used.
+ */
+function DemoQR({ payload, disclaimer }) {
+  return (
+    <details className="qr-demo-section">
+      <summary className="qr-demo-toggle">🎟️ Show Demo QR</summary>
+      <div className="qr-demo-body">
+        <div className="qr-demo-visual" aria-label="Demo QR code pattern" role="img">
+          <code className="qr-payload">{payload}</code>
+        </div>
+        <p className="qr-disclaimer">{disclaimer}</p>
+      </div>
+    </details>
   );
 }

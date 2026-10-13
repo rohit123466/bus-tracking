@@ -1,0 +1,10 @@
+.fav-panel{padding:8px 0}.fav-empty p{color:var(--muted,#888);font-size:13px;margin:4px 0}
+.fav-section{margin-bottom:12px}.fav-section h4{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted,#666)}
+.fav-chips{display:flex;flex-wrap:wrap;gap:5px}
+.fav-chip{padding:5px 11px;border-radius:16px;border:1px solid var(--border,#ddd);background:var(--bg,#fff);cursor:pointer;font-size:13px;transition:background .15s}
+.fav-chip:hover{background:#eaf2ff}
+.fav-chip-route{border-color:#4e8cff;color:#1a56db;font-weight:600}
+.fav-chip-stop{border-color:#16835b;color:#0d5740}
+.fav-chip-home,.fav-chip-office{background:#fef9ec;border-color:#c58414;color:#7a4f00}
+.fav-save-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.fav-save-link{background:none;border:none;color:var(--accent,#1a56db);cursor:pointer;font-size:12px;padding:2px 0;text-decoration:underline}

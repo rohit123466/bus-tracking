@@ -335,6 +335,7 @@ public class TicketService {
         Integer until = t.occupiedUntilSequence();
         boolean onBoardNow = until != null && RouteSegments.onBoardAt(t.getFromSequence(), until, journey.currentSequence());
         FareQuote fareLabel = fareCalculator.quote(t.getPassengerCategory(), t.getSeat().getSeatType(), 0);
+        String qrPayload = buildQrPayload(t, journey);
         return TicketResponse.builder()
                 .ticketNumber(t.getTicketNumber())
                 .busNumber(journey.busNumber())
@@ -362,7 +363,27 @@ public class TicketService {
                 .issuedAt(t.getIssuedAt())
                 .completedAt(t.getCompletedAt())
                 .issuedBy(t.getIssuedBy())
+                .qrCodeBase64(qrPayload)
+                .qrDisclaimer("DEMO ONLY — Not an official DTC ticket. Not accepted for travel.")
                 .build();
+    }
+
+    /**
+     * Builds a compact QR payload string for demo display.
+     * Format: DTCTICKET:ticketNumber:busNumber:seatNumber:fromStop:toStop:issuedEpoch
+     * This is NOT encrypted, NOT signed, and NOT accepted by any official system.
+     * A production system would require a signed JWT or HMAC-verified token.
+     */
+    private String buildQrPayload(Ticket t, TicketingJourney journey) {
+        if (t.getTicketNumber() == null) return null;
+        long issuedEpoch = t.getIssuedAt() != null
+            ? t.getIssuedAt().toEpochSecond(java.time.ZoneOffset.UTC) : 0L;
+        return "DTCTICKET:" + t.getTicketNumber()
+            + ":" + journey.busNumber()
+            + ":" + t.getSeat().getSeatNumber()
+            + ":" + t.getFromStop().getName().replace(":", "-")
+            + ":" + t.getToStop().getName().replace(":", "-")
+            + ":" + issuedEpoch;
     }
 
     static String label(Seat seat) {

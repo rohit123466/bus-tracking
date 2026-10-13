@@ -8,6 +8,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class LiveTransitService {
+  /**
+   * A live vehicle position, enriched with the authoritative GTFS public route number.
+   * {@code speedKmh} is present when the feed or derived movement provides it.
+   * {@code routeMapping} / {@code matchedRouteIds} are only populated on per-route queries.
+   */
   public record Bus(
       String vehicleId,
       String routeId,
@@ -16,9 +21,49 @@ public class LiveTransitService {
       String tripId,
       double busLatitude,
       double busLongitude,
+      Double speedKmh,
       long lastUpdatedEpochSeconds) {}
 
-  public record LiveResult(List<Bus> buses, List<String> warnings, long fetchedAt) {}
+  /** Whether the requested public route number maps to known GTFS route IDs. */
+  public enum RouteMappingStatus { MAPPED, UNMAPPED, UNKNOWN }
+
+  /**
+   * Full live-search result with backwards-compatible fields plus new diagnostic fields.
+   * <p>New: {@code routeMapping}, {@code matchedRouteIds}, {@code feedAvailable},
+   * {@code requestedRouteNumber}.
+   */
+  public record LiveResult(
+      List<Bus> buses,
+      List<String> warnings,
+      long fetchedAt,
+      RouteMappingStatus routeMapping,
+      List<String> matchedRouteIds,
+      boolean feedAvailable,
+      String requestedRouteNumber) {}
+
+  /**
+   * A live bus found near a user-supplied GPS location. Includes distance from the user.
+   * This uses the GTFS realtime feed directly — not the legacy BusLocationStore —
+   * so route numbers are always official GTFS identifiers.
+   */
+  public record NearbyBus(
+      String vehicleId,
+      String routeId,
+      String routeCode,
+      String direction,
+      String tripId,
+      double busLatitude,
+      double busLongitude,
+      Double speedKmh,
+      double distanceMeters,
+      long lastUpdatedEpochSeconds) {}
+
+  public record NearbyResult(
+      List<NearbyBus> buses,
+      List<String> warnings,
+      long fetchedAt,
+      double radiusMeters,
+      boolean feedAvailable) {}
 
   public record Arrival(
       String routeNumber,
@@ -28,7 +73,16 @@ public class LiveTransitService {
       Double etaMinutes,
       long lastGpsUpdate,
       String predictionAvailability,
-      String reason) {}
+      String reason,
+      Integer remainingStops) {
+    /** Backwards-compatible constructor without remainingStops. */
+    public Arrival(String routeNumber, String vehicleId, String tripId,
+        Double distanceMeters, Double etaMinutes, long lastGpsUpdate,
+        String predictionAvailability, String reason) {
+      this(routeNumber, vehicleId, tripId, distanceMeters, etaMinutes,
+           lastGpsUpdate, predictionAvailability, reason, null);
+    }
+  }
 
   public record Arrivals(List<Arrival> arrivals, List<String> warnings) {}
 
@@ -46,8 +100,31 @@ public class LiveTransitService {
     return index.routes.get(trip != null ? trip.routeId() : v.routeId());
   }
 
+  /** Returns the current live vehicle snapshot (unfiltered). */
+  public Collection<RealtimeSnapshot.Vehicle> liveVehicles() {
+    return live.vehicles().values();
+  }
+
+  /** Returns true when the realtime feed has been received and is not stale. */
+  public boolean feedAvailable() {
+    return live.feedError == null
+        && !(live.fetchedAt > 0 && Instant.now().getEpochSecond() - live.fetchedAt > 120);
+  }
+
   public LiveResult buses(String number) {
     String query = number == null ? "" : number.trim().toUpperCase(Locale.ROOT);
+
+    // Resolve official GTFS route_id(s) for the requested public number.
+    // Internal database PKs, row indices, or unverified conversions are never used.
+    List<String> matchedRouteIds = query.isEmpty()
+        ? List.of()
+        : index.routes.values().stream()
+            .filter(r -> query.equals(r.number()))
+            .map(TransitIndex.Route::id)
+            .toList();
+    RouteMappingStatus mappingStatus = query.isEmpty() ? RouteMappingStatus.UNKNOWN
+        : matchedRouteIds.isEmpty() ? RouteMappingStatus.UNMAPPED : RouteMappingStatus.MAPPED;
+
     List<Bus> out = new ArrayList<>();
     List<String> warnings = new ArrayList<>();
     int unmapped = 0, stale = 0;
@@ -62,6 +139,7 @@ public class LiveTransitService {
         unmapped++;
         continue;
       }
+      // Exact match: "106" must not match "106A", "160", or "206".
       if (!query.isEmpty() && !query.equals(r.number())) continue;
       if (live.cancelled(v.tripId())) continue;
       inferred |= r.inferred();
@@ -74,6 +152,7 @@ public class LiveTransitService {
               v.tripId(),
               v.lat(),
               v.lng(),
+              v.speedKmh(),
               v.timestamp()));
     }
     out.sort(Comparator.comparing(Bus::vehicleId));
@@ -85,13 +164,61 @@ public class LiveTransitService {
       warnings.add(
           "Public route number resolved from this feed's route_long_name because route_short_name"
               + " is empty.");
-    if (!query.isEmpty() && index.routes.values().stream().noneMatch(r -> query.equals(r.number())))
+    if (mappingStatus == RouteMappingStatus.UNMAPPED)
       warnings.add(
           "No GTFS public-route mapping for " + query + ". Unrelated vehicles are not shown.");
-    if (live.feedError != null) warnings.add(live.feedError);
-    if (live.fetchedAt > 0 && Instant.now().getEpochSecond() - live.fetchedAt > 120)
+    boolean feedAvail = live.feedError == null;
+    if (!feedAvail) warnings.add(live.feedError);
+    if (live.fetchedAt > 0 && Instant.now().getEpochSecond() - live.fetchedAt > 120) {
       warnings.add("Realtime feed is stale or unavailable.");
-    return new LiveResult(out, warnings, live.fetchedAt);
+      feedAvail = false;
+    }
+    return new LiveResult(out, warnings, live.fetchedAt,
+        mappingStatus, matchedRouteIds, feedAvail, query);
+  }
+
+  /**
+   * Returns all fresh, GTFS-verified live buses within {@code radiusMeters} of the supplied
+   * user coordinates, sorted nearest-first.  No proximity limit is applied to
+   * {@link #buses(String)}; nearby filtering is only ever done here.
+   *
+   * @param lat user latitude (Delhi/NCR validated by the controller)
+   * @param lng user longitude
+   * @param radiusMeters search radius, clamped to [500, 10000] m
+   * @param routeNumber optional public-route filter; blank → all routes
+   */
+  public NearbyResult nearbyBuses(double lat, double lng, double radiusMeters, String routeNumber) {
+    double radius = Math.max(500, Math.min(10000, radiusMeters));
+    String query = routeNumber == null ? "" : routeNumber.trim().toUpperCase(Locale.ROOT);
+    List<NearbyBus> out = new ArrayList<>();
+    List<String> warnings = new ArrayList<>();
+    int unmapped = 0, stale = 0;
+    for (var v : live.vehicles().values()) {
+      if (!RealtimeSnapshot.fresh(v.timestamp())) { stale++; continue; }
+      var r = route(v);
+      if (r == null || r.number() == null) { unmapped++; continue; }
+      if (!query.isEmpty() && !query.equals(r.number())) continue;
+      if (live.cancelled(v.tripId())) continue;
+      double dist = Geometry.distance(lat, lng, v.lat(), v.lng());
+      if (dist > radius) continue;
+      out.add(new NearbyBus(
+          v.id(), r.id(), r.number(),
+          r.direction().isEmpty() ? v.direction() : r.direction(),
+          v.tripId(), v.lat(), v.lng(), v.speedKmh(), dist, v.timestamp()));
+    }
+    // Nearest-first, then by vehicleId for stable ordering of equidistant buses
+    out.sort(Comparator.comparingDouble(NearbyBus::distanceMeters)
+        .thenComparing(NearbyBus::vehicleId));
+    if (unmapped > 0)
+      warnings.add(unmapped + " live vehicles excluded (missing or conflicting GTFS mappings).");
+    if (stale > 0) warnings.add(stale + " stale vehicle positions excluded.");
+    boolean feedAvail = live.feedError == null;
+    if (!feedAvail) warnings.add(live.feedError);
+    if (live.fetchedAt > 0 && Instant.now().getEpochSecond() - live.fetchedAt > 120) {
+      warnings.add("Realtime feed is stale or unavailable.");
+      feedAvail = false;
+    }
+    return new NearbyResult(out, warnings, live.fetchedAt, radius, feedAvail);
   }
 
   public TransitIndex.Stop stop(String id) {
@@ -132,19 +259,37 @@ public class LiveTransitService {
               .findFirst()
               .orElse(null);
       if (visit == null) continue;
-      Arrival a = predict(v, t, visit, r.number());
+      // Count the number of stops the bus will serve before reaching the requested stop.
+      Integer remainingStops = computeRemainingStops(t, v, visit);
+      Arrival a = predict(v, t, visit, r.number(), remainingStops);
       if (a != null) result.add(a);
     }
     result.sort(Comparator.comparing(Arrival::etaMinutes, Comparator.nullsLast(Double::compareTo)));
     List<String> warnings = new ArrayList<>();
     if (index.warning != null) warnings.add(index.warning);
+    if (live.feedError != null) warnings.add(live.feedError);
     if (unresolved > 0)
       warnings.add(unresolved + " vehicles cannot be resolved to an unambiguous approaching trip.");
     return new Arrivals(result, warnings);
   }
 
+  /**
+   * Counts the number of scheduled stops a vehicle will serve before reaching
+   * {@code targetVisit}. Returns null when the stop sequence cannot be determined.
+   */
+  private Integer computeRemainingStops(
+      TransitIndex.Trip trip, RealtimeSnapshot.Vehicle v, TransitIndex.Visit targetVisit) {
+    if (v.sequence() == null) return null;
+    // Count visits in the trip between current stop sequence and the target (exclusive).
+    long count = trip.visits().stream()
+        .filter(vis -> vis.sequence() > v.sequence() && vis.sequence() < targetVisit.sequence())
+        .count();
+    return (int) count;
+  }
+
   private Arrival predict(
-      RealtimeSnapshot.Vehicle v, TransitIndex.Trip trip, TransitIndex.Visit visit, String number) {
+      RealtimeSnapshot.Vehicle v, TransitIndex.Trip trip, TransitIndex.Visit visit, String number,
+      Integer remainingStops) {
     Double distance = null;
     String reason = "Route geometry or reliable speed is unavailable.";
     var shape = index.shapes.get(trip.shapeId());
@@ -194,14 +339,16 @@ public class LiveTransitService {
                 null,
                 v.timestamp(),
                 "UNAVAILABLE",
-                "TripUpdates marks this stop NO_DATA.")
+                "TripUpdates marks this stop NO_DATA.",
+                remainingStops)
             : null;
       if (p.arrival() != null) {
         double minutes = (p.arrival() - Instant.now().getEpochSecond()) / 60.0;
         if (minutes < 0) return null;
         if (minutes <= 180)
           return new Arrival(
-              number, v.id(), trip.id(), distance, minutes, v.timestamp(), "TRIP_UPDATE", null);
+              number, v.id(), trip.id(), distance, minutes, v.timestamp(), "TRIP_UPDATE", null,
+              remainingStops);
       }
     }
     if (distance != null && v.speedKmh() != null && v.speedKmh() >= 3)
@@ -213,9 +360,11 @@ public class LiveTransitService {
           distance / (v.speedKmh() * 1000 / 60),
           v.timestamp(),
           "GEOMETRY_ESTIMATE",
-          "Estimate using recent speed; traffic and dwell time may change arrival.");
+          "Estimate using recent speed; traffic and dwell time may change arrival.",
+          remainingStops);
     if (!approaching) return null;
     return new Arrival(
-        number, v.id(), trip.id(), distance, null, v.timestamp(), "UNAVAILABLE", reason);
+        number, v.id(), trip.id(), distance, null, v.timestamp(), "UNAVAILABLE", reason,
+        remainingStops);
   }
 }
