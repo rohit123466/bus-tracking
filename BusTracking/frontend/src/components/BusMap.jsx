@@ -110,7 +110,7 @@ export default function BusMap({
       {/* Route map shapes + stop markers */}
       {routeMap?.shapes?.map((points, i) => (
         <Polyline
-          key={i}
+          key={points.length > 0 ? `${points[0].lat}-${points[0].lng}-${points.length}` : `shape-${i}`}
           positions={points.map(p => [p.lat, p.lng])}
           pathOptions={{ color: '#aa3bff', weight: 3 }}
         />
@@ -174,6 +174,13 @@ export default function BusMap({
                 )}
               </div>
 
+              {/* Off-route warning — vehicle is far from its assigned shape */}
+              {bus.offRouteFlag && (
+                <div style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', borderRadius: 4, padding: '2px 6px', marginBottom: 4 }}>
+                  ⚠️ Off assigned route geometry ({Math.round(bus.distanceFromShapeMeters)} m from shape)
+                </div>
+              )}
+
               {/* Route name if available (legacy path) */}
               {bus.routeName && <div style={{ fontSize: 12, marginBottom: 3 }}>{bus.routeName}</div>}
 
@@ -208,6 +215,16 @@ export default function BusMap({
               {bus.wheelchairSpaceAvailable != null && (
                 <div style={{ marginTop: 4 }}>
                   <WheelchairBadge status={bus.wheelchairSpaceAvailable} showLabel size="sm" />
+                </div>
+              )}
+
+              {/* Diagnostic fields — mapping provenance for transparency */}
+              {bus.mappingSource && (
+                <div style={{ fontSize: 10, color: '#888', marginTop: 4, borderTop: '1px solid #eee', paddingTop: 3 }}>
+                  GTFS route: {bus.routeId} · Trip: {bus.tripId || 'n/a'} · Source: {bus.mappingSource}
+                  {bus.distanceFromShapeMeters != null && !bus.offRouteFlag && (
+                    <span> · {Math.round(bus.distanceFromShapeMeters)}m from shape</span>
+                  )}
                 </div>
               )}
             </Popup>
