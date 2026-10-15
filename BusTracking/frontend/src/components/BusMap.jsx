@@ -11,12 +11,13 @@ import {
   MapContainer, TileLayer, Marker, Popup, Polyline,
   Circle, ZoomControl, useMap,
 } from 'react-leaflet';
-import { userIcon, stopIconFor, busIcon, selectedBusIcon } from '../utils/leafletIcons';
+import { userIcon, stopIconFor, busIcon, selectedBusIcon, liveBusIcon } from '../utils/leafletIcons';
+import { busFreshness, etaText, FRESHNESS_TEXT } from '../utils/liveMap';
 import WheelchairBadge from './WheelchairBadge';
 
 const DELHI_CENTER = [28.6139, 77.209];
 
-function RecenterOnFirstFix({ userLocation }) {
+function RecenterOnFirstFix({ userLocation, onLocate, locating }) {
   const map = useMap();
   const centered = useRef(false);
   useEffect(() => {
@@ -25,6 +26,24 @@ function RecenterOnFirstFix({ userLocation }) {
       centered.current = true;
     }
   }, [userLocation, map]);
+  // Live Map: always-enabled "Locate Me" that asks for a fresh fix (and permission) on demand.
+  if (onLocate) {
+    return (
+      <button
+        type="button"
+        className="locate-btn"
+        disabled={locating}
+        aria-label="Locate me: centre the map on my current location"
+        onClick={async () => {
+          if (userLocation) map.setView([userLocation.lat, userLocation.lng], 16);
+          const fix = await onLocate();
+          if (fix) map.setView([fix.lat, fix.lng], 16);
+        }}
+      >
+        {locating ? 'Locating…' : '📍 Locate Me'}
+      </button>
+    );
+  }
   return (
     <button
       type="button"
@@ -56,6 +75,9 @@ export default function BusMap({
   walkingRoute,
   routeMap,
   nearbyStops,       // Array of NearbyStop from NearestBusStand — pinned with distance label
+  onLocate,          // Live Map only: () => Promise<location|null> for the Locate Me button
+  locating,
+  liveStatus,        // Live Map only: freshness-coloured route-number markers + richer popup
 }) {
   const busesAtStop = (stopName) => buses.filter((b) => b.stopName === stopName);
 
@@ -70,7 +92,7 @@ export default function BusMap({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <ZoomControl position="bottomright" />
-      <RecenterOnFirstFix userLocation={userLocation} />
+      <RecenterOnFirstFix userLocation={userLocation} onLocate={onLocate} locating={locating} />
 
       {/* User location */}
       {userLocation && (
@@ -157,22 +179,64 @@ export default function BusMap({
       {/* Live bus markers */}
       {uniqueBuses.map((bus) => {
         const isSelected = bus.vehicleId === selectedBusId;
+        const freshness = liveStatus ? busFreshness(bus) : null;
+        const icon = isSelected
+          ? (selectedBusIcon?.(bus.routeCode) ?? busIcon(bus.routeCode))
+          : liveStatus ? liveBusIcon(bus.routeCode, freshness) : busIcon(bus.routeCode);
         return (
           <Marker
             key={bus.vehicleId}
             position={[bus.busLatitude, bus.busLongitude]}
-            icon={isSelected ? (selectedBusIcon?.(bus.routeCode) ?? busIcon(bus.routeCode)) : busIcon(bus.routeCode)}
+            icon={icon}
             eventHandlers={{ click: () => onSelectBus?.(bus) }}
             zIndexOffset={isSelected ? 1000 : 0}
+            riseOnHover={!!liveStatus}
           >
             <Popup>
               {/* Header row */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
                 <strong>Route {bus.routeCode}</strong>
+                {freshness && (
+                  <span className={`live-status live-status-${freshness.toLowerCase()}`}>
+                    {FRESHNESS_TEXT[freshness]}
+                  </span>
+                )}
                 {bus.wheelchairSpaceAvailable != null && (
                   <WheelchairBadge status={bus.wheelchairSpaceAvailable} showLabel={false} size="sm" />
                 )}
               </div>
+
+              {/* Live Map: GPS position, next stop and its ETA (only when actually computable) */}
+              {liveStatus && (
+                <div style={{ fontSize: 12, marginBottom: 4 }}>
+                  <div>
+                    <strong>Location:</strong> {bus.busLatitude.toFixed(5)}, {bus.busLongitude.toFixed(5)}
+                    <span style={{ color: '#888' }}> (GPS from DTC feed)</span>
+                  </div>
+                  <div>
+                    <strong>Next stop:</strong>{' '}
+                    {bus.nextStopName ?? <span style={{ color: '#888' }}>unknown (bus not matched to its route's stops)</span>}
+                    {bus.nextStopDistanceMeters != null && ` · ${Math.round(bus.nextStopDistanceMeters)} m`}
+                    {bus.nextStopSource === 'INFERRED_FROM_GPS_ON_ROUTE' && (
+                      <span style={{ color: '#888' }}> (inferred from GPS position on route)</span>
+                    )}
+                  </div>
+                  {bus.nextStopName && (
+                    <div>
+                      <strong>ETA:</strong>{' '}
+                      {bus.nextStopEtaMinutes != null
+                        ? <>{etaText({ etaMinutes: bus.nextStopEtaMinutes, availability: bus.nextStopEtaBasis })}
+                            <span style={{ color: '#888' }}> (rough estimate from current speed)</span></>
+                        : 'ETA unavailable'}
+                    </div>
+                  )}
+                  {bus.regions?.length > 0 && (
+                    <div style={{ color: '#555' }}>
+                      Route serves: {bus.regions.map(r => (r === 'NORTH' ? 'North' : 'North-West')).join(' & ')} Delhi
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Off-route warning — vehicle is far from its assigned shape */}
               {bus.offRouteFlag && (

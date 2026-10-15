@@ -1,6 +1,7 @@
 package com.dtc.bus_tracker.live;
 
 import java.util.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -14,6 +15,8 @@ public class TransitController {
   private final WalkingService walking;
   private final AlternativeService alternatives;
   private final ServiceAlertService alerts;
+  // Field-injected so the existing five-argument constructor (used by tests) is unchanged.
+  @Autowired private RegionService regions;
 
   public TransitController(
       TransitIndex index,
@@ -26,6 +29,33 @@ public class TransitController {
     this.walking = walking;
     this.alternatives = alternatives;
     this.alerts = alerts;
+  }
+
+  /** Public route numbers that have at least one stop in the requested region. */
+  @GetMapping("/regions/routes")
+  public RegionService.EligibleRoutes regionRoutes(
+      @RequestParam(defaultValue = "ANY") String region) {
+    return regions.routes(RegionService.Filter.parse(region));
+  }
+
+  /** Live buses on region-eligible routes, wherever in Delhi they currently are. */
+  @GetMapping("/buses/regional")
+  public RegionService.RegionalBuses regionalBuses(
+      @RequestParam(defaultValue = "ANY") String region) {
+    return regions.buses(RegionService.Filter.parse(region));
+  }
+
+  /** Nearby stops served by region-eligible routes, with upcoming buses and labelled ETAs. */
+  @GetMapping("/stops/nearby-regional")
+  public RegionService.RegionalStops regionalStops(
+      @RequestParam double latitude,
+      @RequestParam double longitude,
+      @RequestParam(defaultValue = "1000") double radiusMeters,
+      @RequestParam(defaultValue = "5") int limit,
+      @RequestParam(defaultValue = "ANY") String region) {
+    coordinates(latitude, longitude);
+    return regions.nearbyStops(
+        latitude, longitude, radiusMeters, limit, RegionService.Filter.parse(region));
   }
 
   @GetMapping("/buses/live")

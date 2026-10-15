@@ -78,6 +78,26 @@ export function busIcon(routeCode) {
   return icon;
 }
 
+// Live Map variant: sized to the route number (e.g. "801LNKSTL" needs more than
+// 32px) and coloured by GPS freshness so delayed positions are visibly distinct.
+export function liveBusIcon(routeCode, freshness = 'LIVE') {
+  const label = String(routeCode ?? '?');
+  const key = `live:${freshness}:${label}`;
+  let icon = busIconCache.get(key);
+  if (!icon) {
+    const width = Math.max(32, label.length * 7 + 14);
+    const state = freshness === 'LIVE' ? 'live GPS' : 'delayed GPS';
+    icon = L.divIcon({
+      className: `bus-marker live-bus-marker live-bus-${freshness.toLowerCase()}`,
+      html: `<div class="bus-chip" role="img" aria-label="Bus on route ${escapeHtml(label)}, ${state}">${escapeHtml(label)}</div>`,
+      iconSize: [width, 20],
+      iconAnchor: [width / 2, 10],
+    });
+    busIconCache.set(key, icon);
+  }
+  return icon;
+}
+
 /** Highlighted variant of busIcon for the selected bus (Feature 6). */
 export function selectedBusIcon(routeCode) {
   const key = '★' + (routeCode ?? '?');

@@ -46,3 +46,16 @@
 /* ── Favourites collapse toggle ────────────────── */
 .fav-toggle{background:none;border:none;cursor:pointer;font-size:13px;color:var(--accent,#1a56db);padding:4px 0;text-align:left;display:flex;align-items:center;gap:5px;width:100%}
 .fav-toggle:hover{text-decoration:underline}
+/* Live Map: region filter, GPS freshness markers, regional upcoming buses */
+.region-filter{display:block;font-weight:600;margin:10px 0 4px}
+.region-note{font-size:12px;color:#666;margin:2px 0 8px}
+.bus-marker.live-bus-marker{box-sizing:border-box;border:2px solid #fff}
+.live-bus-marker:hover{z-index:10000!important}
+.bus-marker.live-bus-delayed{background:#9a6b00;border-style:dashed}
+.live-status{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700;color:#fff}
+.live-status-live{background:#16835b}.live-status-delayed{background:#9a6b00}.live-status-stale{background:#777}
+.locate-btn{position:absolute;top:12px;right:12px;z-index:1000;padding:8px 12px;border-radius:8px;border:1px solid #ccc;background:#fff;color:#123a73;font-weight:600;cursor:pointer;box-shadow:0 1px 4px #0003}
+.nbs-upcoming{list-style:none;margin:6px 0 0;padding:0;font-size:12px}
+.nbs-upcoming li{display:flex;align-items:center;gap:6px;margin:3px 0}
+.nbs-eta{margin-left:auto;padding:1px 8px;border-radius:9px;font-weight:700;white-space:nowrap}
+.nbs-eta-live{background:#16835b;color:#fff}.nbs-eta-estimate{background:#fff3cd;color:#7a5200;border:1px dashed #c58414}.nbs-eta-unavailable{background:#eee;color:#666}
