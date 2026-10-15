@@ -32,6 +32,42 @@ public class TransitIndex {
   public final Map<String, Set<String>> routesAtStop = new HashMap<>();
   private final Map<String, List<Stop>> cells = new HashMap<>();
 
+  /** Administrative areas used by the Live Map route filter. */
+  public enum Region {
+    NORTH,
+    NORTH_WEST
+  }
+
+  /** Axis-aligned box in {@code minLat,maxLat,minLng,maxLng} order. */
+  public record Bounds(double minLat, double maxLat, double minLng, double maxLng) {
+    public boolean contains(double lat, double lng) {
+      return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+    }
+
+    static Bounds parse(String csv) {
+      String[] p = csv.split(",");
+      if (p.length != 4) throw new IllegalArgumentException("Region bounds need 4 values: " + csv);
+      return new Bounds(
+          Double.parseDouble(p[0].trim()),
+          Double.parseDouble(p[1].trim()),
+          Double.parseDouble(p[2].trim()),
+          Double.parseDouble(p[3].trim()));
+    }
+  }
+
+  /**
+   * Approximate extents of the two districts; configurable because GTFS carries no district
+   * polygons. A route belongs to a region when at least one of its stops lies inside the box.
+   */
+  @Value("${transit.region.north:28.655,28.76,77.17,77.27}")
+  private String northBounds = "28.655,28.76,77.17,77.27";
+
+  @Value("${transit.region.north-west:28.69,28.90,76.83,77.18}")
+  private String northWestBounds = "28.69,28.90,76.83,77.18";
+
+  /** GTFS route_id -> regions in which the route has at least one stop. Absent = neither. */
+  public final Map<String, EnumSet<Region>> routeRegions = new HashMap<>();
+
   @Value("${transit.gtfs-resource:classpath:static/GTFS.zip}")
   private Resource archive;
 
@@ -53,14 +89,12 @@ public class TransitIndex {
     read(
         "stops.txt",
         r -> {
-          Stop s =
+          addStop(
               new Stop(
                   r.get("stop_id"),
                   r.get("stop_name"),
                   Double.parseDouble(r.get("stop_lat")),
-                  Double.parseDouble(r.get("stop_lon")));
-          stops.put(s.id(), s);
-          cells.computeIfAbsent(cell(s.lat(), s.lng()), k -> new ArrayList<>()).add(s);
+                  Double.parseDouble(r.get("stop_lon"))));
         });
     read(
         "trips.txt",
@@ -105,11 +139,48 @@ public class TransitIndex {
       throw new IllegalStateException(
           "GTFS route/stop mappings are empty; resolve Git LFS and configure a valid GTFS"
               + " archive.");
+    computeRegions();
     warning =
         shapes.isEmpty()
             ? "GTFS has no shapes: along-route distance and geometry-based ETA are unavailable."
                   + " Fresh TripUpdates may still supply arrival predictions."
             : null;
+  }
+
+  /** Registers a stop in both the lookup map and the spatial grid used by {@link #nearby}. */
+  public void addStop(Stop s) {
+    stops.put(s.id(), s);
+    cells.computeIfAbsent(cell(s.lat(), s.lng()), k -> new ArrayList<>()).add(s);
+  }
+
+  public Bounds bounds(Region region) {
+    return Bounds.parse(region == Region.NORTH ? northBounds : northWestBounds);
+  }
+
+  /** Regions whose box contains the point; empty when the stop is in neither. */
+  public EnumSet<Region> regionsAt(double lat, double lng) {
+    EnumSet<Region> result = EnumSet.noneOf(Region.class);
+    for (Region r : Region.values()) if (bounds(r).contains(lat, lng)) result.add(r);
+    return result;
+  }
+
+  /**
+   * Derives {@link #routeRegions} from the actual stop-to-route mapping (stop_times), not from any
+   * vehicle position, so a route is eligible even when its buses are currently elsewhere.
+   */
+  public void computeRegions() {
+    routeRegions.clear();
+    Map<Region, Bounds> boxes = new EnumMap<>(Region.class);
+    for (Region r : Region.values()) boxes.put(r, bounds(r));
+    for (var entry : routesAtStop.entrySet()) {
+      Stop s = stops.get(entry.getKey());
+      if (s == null) continue;
+      EnumSet<Region> here = EnumSet.noneOf(Region.class);
+      boxes.forEach((r, b) -> { if (b.contains(s.lat(), s.lng())) here.add(r); });
+      if (here.isEmpty()) continue;
+      for (String routeId : entry.getValue())
+        routeRegions.computeIfAbsent(routeId, k -> EnumSet.noneOf(Region.class)).addAll(here);
+    }
   }
 
   public static String publicNumber(String shortName, String longName) {

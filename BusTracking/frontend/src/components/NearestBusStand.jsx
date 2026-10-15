@@ -17,7 +17,8 @@
  *  6. Pins all found stops on the map via the onStopsFound callback.
  */
 import { useEffect, useRef, useState } from 'react';
-import { getNearbyGtfsStops } from '../api/client';
+import { getNearbyGtfsStops, transitGet } from '../api/client';
+import { isRegional, etaText, ETA_KIND } from '../utils/liveMap';
 import './NearestBusStand.css';
 
 const RADIUS_OPTIONS = [
@@ -42,7 +43,9 @@ export default function NearestBusStand({
   onSelectStop,       // (stop) => void  — called when user taps a stop
   onStopsFound,       // (stops) => void — to pin them on the map
   selectedStopId,     // currently selected stop id (for highlight)
+  region,             // optional Live Map filter: only stops served by region-eligible routes
 }) {
+  const regional = isRegional(region);
   const [radius, setRadius]   = useState(1000);
   const [result, setResult]   = useState(null);   // NearbyStopsResult
   const [loading, setLoading] = useState(false);
@@ -62,9 +65,12 @@ export default function NearestBusStand({
       setLoading(true);
 
       try {
-        const data = await getNearbyGtfsStops(
-          userLocation.lat, userLocation.lng, radius, 8
-        );
+        const data = regional
+          ? await transitGet('/stops/nearby-regional', {
+              latitude: userLocation.lat, longitude: userLocation.lng,
+              radiusMeters: radius, limit: 8, region,
+            }, ctrl.signal)
+          : await getNearbyGtfsStops(userLocation.lat, userLocation.lng, radius, 8);
         if (ctrl.signal.aborted) return;
         setResult(data);
         setError('');
@@ -86,7 +92,7 @@ export default function NearestBusStand({
       abortRef.current?.abort();
       clearInterval(timerRef.current);
     };
-  }, [userLocation, radius]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userLocation, radius, region]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── No GPS yet ───────────────────────────────────────────────────────────
   if (!userLocation) {
@@ -167,8 +173,10 @@ export default function NearestBusStand({
                     <span className="nbs-dist" title="Straight-line distance">
                       📏 {distLabel(stop.distanceMeters)}
                     </span>
-                    <span className="nbs-walk" title="Estimated walking time at 5 km/h">
-                      🚶 {walkLabel(stop.walkMinutes)}
+                    <span className="nbs-walk" title={regional
+                      ? 'Straight-line estimate at 5 km/h, not a road route. Select the stop and use "Walk to" for a walking route.'
+                      : 'Estimated walking time at 5 km/h'}>
+                      🚶 {walkLabel(stop.walkMinutes)}{regional && ' (straight-line est.)'}
                     </span>
                     {/* Live bus count badge */}
                     {result?.feedAvailable && (
@@ -191,6 +199,29 @@ export default function NearestBusStand({
                         <span className="nbs-route-more">+{stop.routeNumbers.length - 8} more</span>
                       )}
                     </div>
+                  )}
+
+                  {/* Live Map regional mode: upcoming buses on eligible routes */}
+                  {regional && stop.upcoming && (
+                    stop.upcoming.length > 0 ? (
+                      <ul className="nbs-upcoming" aria-label="Upcoming buses">
+                        {stop.upcoming.map(u => (
+                          <li key={u.vehicleId} title={u.reason ? `${u.label}. ${u.reason}` : u.label}>
+                            <span className="nbs-route-chip">{u.routeNumber}</span>
+                            {u.remainingStops != null && <span>{u.remainingStops} stops away</span>}
+                            <span className={`nbs-eta nbs-eta-${ETA_KIND[u.availability] ?? 'unavailable'}`}>
+                              {etaText(u)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <small style={{ color: '#888' }}>
+                        {result?.feedAvailable
+                          ? 'No live bus on these routes is currently tracked towards this stop.'
+                          : 'Live vehicle feed unavailable: showing static route data only.'}
+                      </small>
+                    )
                   )}
                 </div>
 

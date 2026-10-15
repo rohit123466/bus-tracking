@@ -24,10 +24,13 @@ import useWalkingNavigation from '../hooks/useWalkingNavigation';
 import useUserLocation from '../hooks/useUserLocation';
 import useFavourites from '../hooks/useFavourites';
 import { visibleBuses } from '../utils/navigation';
+import { REGION_OPTIONS, DEFAULT_REGION, isRegional, regionLabel } from '../utils/liveMap';
 import './LiveTransit.css';
 
 export default function HomePage() {
   const [routeNumber, setRouteNumber] = useState('');
+  // Route-based region filter; applies when no single route is searched.
+  const [region, setRegion] = useState(DEFAULT_REGION);
   const [data, setData] = useState({ buses: [], warnings: [] });
   const [stop, setStop] = useState(null), [destination, setDestination] = useState(null);
   const [arrivals, setArrivals] = useState({ arrivals: [], warnings: [] });
@@ -60,9 +63,14 @@ export default function HomePage() {
   useEffect(() => {
     const ctrl = new AbortController(); let timer;
     setData({ buses: [], warnings: [] });
+    // A searched route keeps the original endpoint; otherwise show region-eligible routes,
+    // wherever in Delhi their buses currently are.
+    const regional = !routeNumber && isRegional(region);
     const poll = async () => {
       try {
-        const result = await transitGet('/buses/live', { routeNumber }, ctrl.signal);
+        const result = regional
+          ? await transitGet('/buses/regional', { region }, ctrl.signal)
+          : await transitGet('/buses/live', { routeNumber }, ctrl.signal);
         if (!ctrl.signal.aborted) { setData(result); setUpdated(new Date()); setError(''); }
       } catch {
         if (!ctrl.signal.aborted) { setData({ buses: [], warnings: [] }); setError('Live bus feed unavailable. Please retry.'); }
@@ -72,7 +80,7 @@ export default function HomePage() {
     };
     poll();
     return () => { ctrl.abort(); clearTimeout(timer); };
-  }, [routeNumber]);
+  }, [routeNumber, region]);
 
   // ── Arrivals + alternatives polling ────────────────────────────────────────
   useEffect(() => {
@@ -174,14 +182,43 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* Region filter (route-based: a route qualifies by its stops, not the bus's position) */}
+        <label className="region-filter">
+          Show routes
+          <select
+            value={region}
+            onChange={e => setRegion(e.target.value)}
+            aria-describedby="region-note"
+          >
+            {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+        <p id="region-note" className="region-note">
+          {routeNumber
+            ? `Showing searched route ${routeNumber}; clear it to use the region filter.`
+            : isRegional(region)
+              ? 'Includes buses anywhere in Delhi whose route stops in this area.'
+              : 'All routes with a verified GTFS route number.'}
+        </p>
+
         {/* Live bus count */}
         <p role="status">
           <strong>{buses.length} active bus{buses.length !== 1 ? 'es' : ''}</strong>
-          {routeNumber ? ` on route ${routeNumber}` : ' across mapped routes'}
+          {routeNumber
+            ? ` on route ${routeNumber}`
+            : isRegional(region)
+              ? ` on ${data.eligibleRouteCount ?? '…'} ${regionLabel(region).replace(/ routes$/, '')} routes`
+              : ' across mapped routes'}
           {updated && <small> · Updated {updated.toLocaleTimeString()}</small>}
         </p>
         {!buses.length && routeNumber && (
           <p>No live buses currently reporting for route {routeNumber}.</p>
+        )}
+        {data.feedAvailable === false && (
+          <p role="alert" className="transit-warning">
+            Live vehicle positions are unavailable right now. Route and stop information below is
+            static GTFS data; nothing on the map is shown as a live bus until the feed returns.
+          </p>
         )}
         {error && <p role="alert">{error}</p>}
         {data.warnings.map(w => <p className="transit-warning" key={w}>{w}</p>)}
@@ -209,6 +246,7 @@ export default function HomePage() {
             onSelectStop={handleSelectStop}
             onStopsFound={setNearbyStops}
             selectedStopId={stop?.id}
+            region={region}
           />
         </section>
 
@@ -391,6 +429,9 @@ export default function HomePage() {
           routeMap={routeMap}
           nearbyStops={nearbyStops}
           onSelectStop={handleSelectStop}
+          onLocate={gps.locate}
+          locating={gps.locating}
+          liveStatus
         />
       </div>
     </div>
