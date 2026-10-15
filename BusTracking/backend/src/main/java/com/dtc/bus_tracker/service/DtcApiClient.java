@@ -74,7 +74,8 @@ public class DtcApiClient {
             if (!com.dtc.bus_tracker.live.RealtimeSnapshot.fresh(v.timestamp())) continue;
             events.add(BusLocationEvent.builder()
                     .vehicleId(v.id()).latitude(v.lat()).longitude(v.lng())
-                    .routeId(v.routeId()).timestamp(v.timestamp())
+                    .routeId(v.routeId()).tripId(v.tripId())
+                    .timestamp(v.timestamp())
                     .speedKmh(v.speedKmh()).bearing(v.bearing())
                     .wheelchairSpaceAvailable(null).build());
         }

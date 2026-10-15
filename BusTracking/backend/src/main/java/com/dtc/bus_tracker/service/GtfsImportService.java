@@ -63,7 +63,10 @@ public class GtfsImportService {
     }
 
     private record StopRow(String stopId, String name, double lat, double lon, boolean wheelchairBoarding) {}
-    private record TripRow(String routeCode, String serviceId, String tripId, String shapeId, boolean wheelchairAccessible) {}
+    // routeCode holds the GTFS route_id (not route_short_name).
+    // directionId is optional and may be blank when the feed omits it.
+    private record TripRow(String routeCode, String serviceId, String tripId, String shapeId,
+                           String directionId, boolean wheelchairAccessible) {}
 
     /**
      * A real GTFS feed zip is many MB; an unresolved Git LFS pointer file is a
@@ -148,32 +151,69 @@ public class GtfsImportService {
         return kept;
     }
 
+    /**
+     * Reads stops.txt using header-name column lookup so the import is
+     * robust to any GTFS-compliant column ordering (standard has stop_id at
+     * column 0, but some feeds add or reorder columns).
+     * Required GTFS columns: stop_id, stop_lat, stop_lon, stop_name.
+     */
     private List<StopRow> readStops() throws Exception {
         List<StopRow> rows = new ArrayList<>();
         withZipEntry("stops.txt", zis -> {
             try (CSVReader reader = new CSVReader(new InputStreamReader(zis))) {
                 String[] header = reader.readNext();
-                int wheelchairIdx = columnIndex(header, "wheelchair_boarding");
+                if (header == null)
+                    throw new IllegalStateException("stops.txt is empty or has no header row.");
+                int idxId       = requiredColumn(header, "stop_id");
+                int idxLat      = requiredColumn(header, "stop_lat");
+                int idxLon      = requiredColumn(header, "stop_lon");
+                int idxName     = requiredColumn(header, "stop_name");
+                int idxWheelchair = columnIndex(header, "wheelchair_boarding");
                 String[] row;
                 while ((row = reader.readNext()) != null) {
-                    rows.add(new StopRow(row[1], row[4], Double.parseDouble(row[2]), Double.parseDouble(row[3]),
-                            isFlagSet(row, wheelchairIdx)));
+                    if (row.length <= Math.max(idxId, Math.max(idxLat, Math.max(idxLon, idxName))))
+                        continue; // skip short/corrupt rows
+                    rows.add(new StopRow(
+                            row[idxId].trim(),
+                            row[idxName].trim(),
+                            Double.parseDouble(row[idxLat].trim()),
+                            Double.parseDouble(row[idxLon].trim()),
+                            isFlagSet(row, idxWheelchair)));
                 }
             }
         });
         return rows;
     }
 
+    /**
+     * Reads trips.txt using header-name column lookup.
+     * Required GTFS columns: route_id, service_id, trip_id.
+     * Optional: shape_id, direction_id, wheelchair_accessible.
+     */
     private List<TripRow> readTrips() throws Exception {
         List<TripRow> rows = new ArrayList<>();
         withZipEntry("trips.txt", zis -> {
             try (CSVReader reader = new CSVReader(new InputStreamReader(zis))) {
                 String[] header = reader.readNext();
-                int wheelchairIdx = columnIndex(header, "wheelchair_accessible");
+                if (header == null)
+                    throw new IllegalStateException("trips.txt is empty or has no header row.");
+                int idxRouteId   = requiredColumn(header, "route_id");
+                int idxServiceId = requiredColumn(header, "service_id");
+                int idxTripId    = requiredColumn(header, "trip_id");
+                int idxShapeId   = columnIndex(header, "shape_id");
+                int idxDirId     = columnIndex(header, "direction_id");
+                int idxWheelchair = columnIndex(header, "wheelchair_accessible");
                 String[] row;
                 while ((row = reader.readNext()) != null) {
-                    rows.add(new TripRow(row[0], row[1], row[2], row.length > 3 ? row[3] : null,
-                            isFlagSet(row, wheelchairIdx)));
+                    if (row.length <= Math.max(idxRouteId, Math.max(idxServiceId, idxTripId)))
+                        continue;
+                    rows.add(new TripRow(
+                            row[idxRouteId].trim(),
+                            row[idxServiceId].trim(),
+                            row[idxTripId].trim(),
+                            idxShapeId >= 0 && idxShapeId < row.length ? row[idxShapeId].trim() : null,
+                            idxDirId  >= 0 && idxDirId  < row.length ? row[idxDirId].trim()  : "",
+                            isFlagSet(row, idxWheelchair)));
                 }
             }
         });
@@ -194,19 +234,40 @@ public class GtfsImportService {
         return -1;
     }
 
+    /**
+     * Like {@link #columnIndex} but throws when the column is absent, to fail
+     * loudly on a malformed GTFS file rather than silently reading the wrong data.
+     */
+    private int requiredColumn(String[] header, String columnName) {
+        int idx = columnIndex(header, columnName);
+        if (idx < 0)
+            throw new IllegalStateException(
+                    "GTFS file is missing required column '" + columnName + "'. "
+                    + "Check that the GTFS.zip matches the DTC/DIMTS feed format.");
+        return idx;
+    }
+
     private boolean isFlagSet(String[] row, int columnIndex) {
         return columnIndex >= 0 && columnIndex < row.length && "1".equals(row[columnIndex].trim());
     }
 
+    /**
+     * Pass 1 over stop_times.txt: collects which trip_ids touch a kept stop,
+     * using header-name column lookup for robustness.
+     */
     private Set<String> collectTripIdsForStops(Set<String> keptStopIds) throws Exception {
         Set<String> tripIds = new HashSet<>();
         withZipEntry("stop_times.txt", zis -> {
             try (CSVReader reader = new CSVReader(new InputStreamReader(zis))) {
-                reader.readNext();
+                String[] header = reader.readNext();
+                if (header == null) return;
+                int idxTripId = requiredColumn(header, "trip_id");
+                int idxStopId = requiredColumn(header, "stop_id");
                 String[] row;
                 while ((row = reader.readNext()) != null) {
-                    if (keptStopIds.contains(row[3])) {
-                        tripIds.add(row[0]);
+                    if (row.length <= Math.max(idxTripId, idxStopId)) continue;
+                    if (keptStopIds.contains(row[idxStopId].trim())) {
+                        tripIds.add(row[idxTripId].trim());
                     }
                 }
             }
@@ -215,20 +276,32 @@ public class GtfsImportService {
         return tripIds;
     }
 
+    /**
+     * Reads routes.txt using header-name column lookup.
+     * Required GTFS columns: route_id.
+     * Optional: route_short_name, route_long_name.
+     */
     private Map<String, Route> importRoutes(Set<String> keptRouteCodes, boolean filtered) throws Exception {
         Map<String, Route> byCode = new HashMap<>();
         withZipEntry("routes.txt", zis -> {
             try (CSVReader reader = new CSVReader(new InputStreamReader(zis))) {
-                reader.readNext();
+                String[] header = reader.readNext();
+                if (header == null) return;
+                int idxRouteId   = requiredColumn(header, "route_id");
+                int idxShortName = columnIndex(header, "route_short_name");
+                int idxLongName  = columnIndex(header, "route_long_name");
                 String[] row;
                 int count = 0;
                 while ((row = reader.readNext()) != null) {
-                    String routeCode = row[1];
+                    if (row.length <= idxRouteId) continue;
+                    // routeCode stores the GTFS route_id, not the human-readable route number.
+                    String routeCode = row[idxRouteId].trim();
                     if (filtered && !keptRouteCodes.contains(routeCode)) continue;
-
+                    String shortName = idxShortName >= 0 && idxShortName < row.length ? row[idxShortName].trim() : "";
+                    String longName  = idxLongName  >= 0 && idxLongName  < row.length ? row[idxLongName].trim()  : "";
                     Route route = Route.builder()
                             .routeCode(routeCode)
-                            .name(row[2].isBlank() ? row[3] : row[2])
+                            .name(shortName.isBlank() ? longName : shortName)
                             .build();
                     routeRepository.save(route);
                     byCode.put(routeCode, route);
@@ -280,6 +353,10 @@ public class GtfsImportService {
         return byTripId;
     }
 
+    /**
+     * Pass 2 over stop_times.txt: inserts StopTime rows, using header-name
+     * column lookup for robustness.
+     */
     private void importStopTimes(Map<String, Trip> tripByTripId, Map<String, Stop> stopByStopId) throws Exception {
         int batchSize = 1000;
         List<StopTime> batch = new ArrayList<>();
@@ -291,11 +368,21 @@ public class GtfsImportService {
 
         withZipEntry("stop_times.txt", zis -> {
             try (CSVReader reader = new CSVReader(new InputStreamReader(zis))) {
-                reader.readNext();
+                String[] header = reader.readNext();
+                if (header == null) return;
+                int idxTripId   = requiredColumn(header, "trip_id");
+                int idxArrival  = requiredColumn(header, "arrival_time");
+                int idxDepart   = requiredColumn(header, "departure_time");
+                int idxStopId   = requiredColumn(header, "stop_id");
+                int idxSeq      = requiredColumn(header, "stop_sequence");
                 String[] row;
                 while ((row = reader.readNext()) != null) {
-                    Trip trip = tripByTripId.get(row[0]);
-                    Stop stop = stopByStopId.get(row[3]);
+                    if (row.length <= Math.max(idxTripId, Math.max(idxStopId, idxSeq))) {
+                        counters[1]++;
+                        continue;
+                    }
+                    Trip trip = tripByTripId.get(row[idxTripId].trim());
+                    Stop stop = stopByStopId.get(row[idxStopId].trim());
                     if (trip == null || stop == null) {
                         counters[1]++;
                         continue;
@@ -304,9 +391,9 @@ public class GtfsImportService {
                     StopTime st = StopTime.builder()
                             .trip(trip)
                             .stop(stop)
-                            .arrivalTime(parseGtfsTime(row[1]))
-                            .departureTime(parseGtfsTime(row[2]))
-                            .stopSequence(Integer.parseInt(row[4]))
+                            .arrivalTime(parseGtfsTime(row[idxArrival].trim()))
+                            .departureTime(parseGtfsTime(row[idxDepart].trim()))
+                            .stopSequence(Integer.parseInt(row[idxSeq].trim()))
                             .build();
 
                     batch.add(st);

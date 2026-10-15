@@ -57,10 +57,15 @@ public class RouteController {
     @GetMapping("/search")
     public ResponseEntity<List<RouteDto>> searchRoutes(@RequestParam String query,
                                                        @RequestParam(defaultValue = "10") int limit) {
-        // Simple in-memory search; for production use @Query with LIKE
+        // Use prefix matching (startsWith) on routeCode and name-contains for display text.
+        // This prevents "534" from matching "2534" or "1534A" via substring, while still
+        // allowing name search (e.g. "Rohini") to find routes by destination name.
+        // routeCode is the GTFS route_id; name is route_short_name or route_long_name.
+        String lowerQuery = query.toLowerCase();
         List<Route> routes = routeRepository.findAllWithStops().stream()
-                .filter(r -> r.getName() != null && r.getName().toLowerCase().contains(query.toLowerCase())
-                        || r.getRouteCode() != null && r.getRouteCode().toLowerCase().contains(query.toLowerCase()))
+                .filter(r ->
+                    (r.getRouteCode() != null && r.getRouteCode().toLowerCase().startsWith(lowerQuery))
+                    || (r.getName() != null && r.getName().toLowerCase().contains(lowerQuery)))
                 .limit(limit)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(routes.stream().map(this::toDTO).collect(Collectors.toList()));

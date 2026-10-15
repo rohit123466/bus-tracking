@@ -55,12 +55,16 @@ public class TransitController {
   public List<String> routes(@RequestParam(defaultValue = "") String query) {
     query(query);
     String q = query.trim().toUpperCase(Locale.ROOT);
+    if (q.isEmpty()) return List.of();
     return index.routes.values().stream()
         .map(TransitIndex.Route::number)
         .filter(Objects::nonNull)
+        // Exact match first, then prefix-startsWith — exact results sort to top.
+        // This ensures "534" returns "534" before "534A", "534B" etc., and
+        // "1060" does not appear in results for query "106".
         .filter(n -> n.startsWith(q))
         .distinct()
-        .sorted()
+        .sorted(Comparator.comparingInt((String n) -> n.equals(q) ? 0 : 1).thenComparing(Comparator.naturalOrder()))
         .limit(10)
         .toList();
   }

@@ -12,6 +12,16 @@ public class LiveTransitService {
    * A live vehicle position, enriched with the authoritative GTFS public route number.
    * {@code speedKmh} is present when the feed or derived movement provides it.
    * {@code routeMapping} / {@code matchedRouteIds} are only populated on per-route queries.
+   *
+   * <p>Diagnostic fields (always set, available in JSON response):
+   * <ul>
+   *   <li>{@code tripId} — GTFS trip_id from the realtime feed</li>
+   *   <li>{@code mappingSource} — how the public route number was resolved</li>
+   *   <li>{@code distanceFromShapeMeters} — vehicle's perpendicular distance from its assigned
+   *       route shape; null when shapes are unavailable</li>
+   *   <li>{@code offRouteFlag} — true when the vehicle is &gt; OFF_ROUTE_THRESHOLD_METERS from
+   *       its assigned shape (GPS noise or genuine diversion, NOT a mapping error)</li>
+   * </ul>
    */
   public record Bus(
       String vehicleId,
@@ -22,7 +32,14 @@ public class LiveTransitService {
       double busLatitude,
       double busLongitude,
       Double speedKmh,
-      long lastUpdatedEpochSeconds) {}
+      long lastUpdatedEpochSeconds,
+      // ── Diagnostic fields ────────────────────────────────────────────────
+      /** How the public route number was resolved: TRIP_ID_LOOKUP | ROUTE_ID_FALLBACK | INFERRED */
+      String mappingSource,
+      /** Vehicle's perpendicular offset from its GTFS shape (metres). Null = no shape. */
+      Double distanceFromShapeMeters,
+      /** True when distanceFromShapeMeters exceeds the off-route threshold. */
+      boolean offRouteFlag) {}
 
   /** Whether the requested public route number maps to known GTFS route IDs. */
   public enum RouteMappingStatus { MAPPED, UNMAPPED, UNKNOWN }
@@ -94,10 +111,43 @@ public class LiveTransitService {
     this.live = live;
   }
 
+  /**
+   * Vehicles whose perpendicular distance from their assigned route shape exceeds
+   * this threshold are flagged as off-route. They are still returned in the
+   * response (genuine diversions happen) but {@code offRouteFlag} is set to true
+   * so the UI can highlight them. Adjust via {@code transit.off-route-threshold-m}
+   * when required; 500 m accommodates GPS noise and minor road deviations.
+   */
+  private static final double OFF_ROUTE_THRESHOLD_METERS = 500.0;
+
   public TransitIndex.Route route(RealtimeSnapshot.Vehicle v) {
     var trip = index.trips.get(v.tripId());
     if (trip != null && !v.routeId().isBlank() && !trip.routeId().equals(v.routeId())) return null;
     return index.routes.get(trip != null ? trip.routeId() : v.routeId());
+  }
+
+  /**
+   * Returns the mapping source string for diagnostic logging.
+   * "TRIP_ID_LOOKUP"  — resolved via trips.txt (authoritative)
+   * "ROUTE_ID_FALLBACK" — trip_id absent or unknown; used vehicle's route_id directly
+   * "INFERRED"        — route_short_name was empty; number extracted from route_long_name
+   */
+  private String mappingSource(RealtimeSnapshot.Vehicle v, TransitIndex.Route r) {
+    if (r == null) return "UNRESOLVED";
+    if (index.trips.containsKey(v.tripId())) return r.inferred() ? "INFERRED" : "TRIP_ID_LOOKUP";
+    return r.inferred() ? "INFERRED" : "ROUTE_ID_FALLBACK";
+  }
+
+  /**
+   * Computes the vehicle's perpendicular distance from its assigned GTFS shape.
+   * Returns null when no shape is available for this trip.
+   */
+  private Double distanceFromShape(RealtimeSnapshot.Vehicle v) {
+    var trip = index.trips.get(v.tripId());
+    if (trip == null) return null;
+    var shape = index.shapes.get(trip.shapeId());
+    if (shape == null || shape.size() < 2) return null;
+    return Geometry.project(shape, v.lat(), v.lng()).offset();
   }
 
   /** Returns the current live vehicle snapshot (unfiltered). */
@@ -143,6 +193,24 @@ public class LiveTransitService {
       if (!query.isEmpty() && !query.equals(r.number())) continue;
       if (live.cancelled(v.tripId())) continue;
       inferred |= r.inferred();
+
+      // ── Diagnostic fields ───────────────────────────────────────────────
+      String src = mappingSource(v, r);
+      Double distFromShape = distanceFromShape(v);
+      boolean offRoute = distFromShape != null && distFromShape > OFF_ROUTE_THRESHOLD_METERS;
+
+      // Dev-mode diagnostic log — does NOT log API keys or secrets.
+      System.out.printf(
+          "[LiveTransit] ACCEPTED vehicle=%s requestedRoute=%s resolvedRouteId=%s tripId=%s"
+              + " direction=%s lat=%.6f lng=%.6f gpsAge=%ds mappingSource=%s distFromShape=%s offRoute=%b%n",
+          v.id(), query.isEmpty() ? "(all)" : query, r.id(), v.tripId(),
+          r.direction().isEmpty() ? v.direction() : r.direction(),
+          v.lat(), v.lng(),
+          java.time.Instant.now().getEpochSecond() - v.timestamp(),
+          src,
+          distFromShape != null ? String.format("%.0fm", distFromShape) : "n/a",
+          offRoute);
+
       out.add(
           new Bus(
               v.id(),
@@ -153,7 +221,10 @@ public class LiveTransitService {
               v.lat(),
               v.lng(),
               v.speedKmh(),
-              v.timestamp()));
+              v.timestamp(),
+              src,
+              distFromShape,
+              offRoute));
     }
     out.sort(Comparator.comparing(Bus::vehicleId));
     if (unmapped > 0)

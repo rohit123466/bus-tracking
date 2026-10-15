@@ -18,9 +18,31 @@ export function progress(coordinates, location) {
   }
   return { offset, remaining: Math.max(0, total - along), segment, total };
 }
+/**
+ * Filters and deduplicates live bus positions for rendering.
+ *
+ * Rules enforced here (all of which the server already applies, but defended
+ * again client-side to guard against stale race responses):
+ *  1. vehicleId must be a non-empty string.
+ *  2. routeCode must exactly match routeNumber when a route is selected.
+ *     Both are uppercased before comparison so "534a" === "534A".
+ *  3. busLatitude and busLongitude must be finite numbers.
+ *  4. GPS timestamp must be fresh (within 120 s, no more than 30 s in future).
+ *  5. Deduplicated by vehicleId — last-write wins via Map insertion order.
+ *
+ * @param {Array} buses - Raw bus array from the API response.
+ * @param {string} routeNumber - Selected route public number (e.g. "534"), or "".
+ * @param {number} [now] - Current epoch seconds (injectable for tests).
+ */
 export function visibleBuses(buses, routeNumber, now = Date.now() / 1000) {
-  return [...new Map(buses.filter(b => b.vehicleId && (!routeNumber || b.routeCode === routeNumber) &&
+  const selectedRoute = routeNumber ? routeNumber.trim().toUpperCase() : '';
+  return [...new Map(buses.filter(b =>
+    b.vehicleId &&
+    // Exact route match (case-insensitive), or no route selected.
+    (!selectedRoute || (b.routeCode != null && b.routeCode.toString().toUpperCase() === selectedRoute)) &&
     Number.isFinite(b.busLatitude) && Number.isFinite(b.busLongitude) &&
-    b.lastUpdatedEpochSeconds > 0 && now - b.lastUpdatedEpochSeconds <= 120 && now - b.lastUpdatedEpochSeconds >= -30)
+    b.lastUpdatedEpochSeconds > 0 &&
+    now - b.lastUpdatedEpochSeconds <= 120 &&
+    now - b.lastUpdatedEpochSeconds >= -30)
     .map(b => [b.vehicleId, b])).values()];
 }
