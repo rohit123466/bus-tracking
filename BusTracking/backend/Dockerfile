@@ -1,5 +1,5 @@
 # Build stage: compile and package the Spring Boot fat jar.
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-26 AS build
 WORKDIR /app
 
 # Resolve dependencies first so this layer is cached across source-only changes.
