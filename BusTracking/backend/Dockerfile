@@ -16,7 +16,7 @@ RUN test "$(stat -c %s src/main/resources/static/GTFS.zip)" -gt 1000000 \
 RUN mvn -B -q package -DskipTests
 
 # Runtime stage
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:24-jre
 WORKDIR /app
 
 # Run as an unprivileged user. ./data holds the learned-routes file (RouteLearner),
