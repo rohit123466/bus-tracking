@@ -17,7 +17,7 @@
 	<properties>
 		<java.version>21</java.version>
 		<protobuf.version>4.34.2</protobuf.version>
-		<opencsv.version>5.9</opencsv.version>
+		<opencsv.version>5.12.0</opencsv.version>
 		<gtfs.version>0.2.0</gtfs.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<jjwt.version>0.12.6</jjwt.version>
