@@ -98,6 +98,18 @@ export function liveBusIcon(routeCode, freshness = 'LIVE') {
   return icon;
 }
 
+/** Bus heading to one of the user's nearby stops: route number plus its ETA, e.g. "205 · ≈ 7 min". */
+export function approachingBusIcon(routeCode, etaLabel) {
+  const label = `${routeCode ?? '?'} · ${etaLabel}`;
+  const width = Math.max(48, label.length * 7 + 16);
+  return L.divIcon({
+    className: 'bus-marker approaching-bus-marker',
+    html: `<div class="bus-chip" role="img" aria-label="Bus on route ${escapeHtml(routeCode ?? '?')} coming to your stop, ${escapeHtml(etaLabel)}">${escapeHtml(label)}</div>`,
+    iconSize: [width, 22],
+    iconAnchor: [width / 2, 11],
+  });
+}
+
 /** Highlighted variant of busIcon for the selected bus (Feature 6). */
 export function selectedBusIcon(routeCode) {
   const key = '★' + (routeCode ?? '?');

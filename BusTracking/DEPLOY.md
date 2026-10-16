@@ -24,6 +24,10 @@
 
 ## Things to know
 
+- **Startup safety check:** the `prod` profile refuses to start if `JWT_SECRET` is shorter than 32 bytes, `ADMIN_PASSWORD` is weak (shorter than 12 characters, or a default like `admin123`), or `CORS_ALLOWED_ORIGINS` is empty or a wildcard. The values `render.yaml` generates pass. If a deploy fails at boot, the log line starting `Refusing to start in prod:` names the variable to fix.
+- **Learned routes:** `RouteLearner` saves to `/app/data/learned-routes.txt`. On the free plan that disk is wiped on every deploy and restart. Add a Render persistent disk (paid plans) mounted at `/app/data` to keep it.
+- **History retention:** bus position history older than `BUS_HISTORY_RETENTION_HOURS` (default 24) is purged hourly, which keeps the free 1 GB Postgres from filling up.
+
 - **GTFS.zip is stored in Git LFS.** The Docker build fails early if it only gets the LFS pointer. If Render doesn't fetch LFS for your repo, remove the LFS rule (`BusTracking/.gitattributes`) and re-commit the zip as a normal file (55 MB, under GitHub's 100 MB limit).
 - **Import area:** `GTFS_IMPORT_RADIUS_DEGREES=0.16` limits data to North/North West Delhi so it fits a 512 MB instance. Set it to `0` for the full Delhi feed - use a larger plan, and wipe the DB first, since the import is skipped once routes exist. The live-bus filter uses the same route set.
 - **Free plans:** everything in `render.yaml` uses Render's free tier (no card needed).

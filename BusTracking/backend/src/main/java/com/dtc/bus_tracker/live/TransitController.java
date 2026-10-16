@@ -17,6 +17,7 @@ public class TransitController {
   private final ServiceAlertService alerts;
   // Field-injected so the existing five-argument constructor (used by tests) is unchanged.
   @Autowired private RegionService regions;
+  @Autowired private RouteLearner learner;
 
   public TransitController(
       TransitIndex index,
@@ -31,6 +32,12 @@ public class TransitController {
     this.alerts = alerts;
   }
 
+  /** How many routes running right now have a path learned from live GPS. */
+  @GetMapping("/learning/status")
+  public RouteLearner.Status learningStatus() {
+    return learner.status();
+  }
+
   /** Public route numbers that have at least one stop in the requested region. */
   @GetMapping("/regions/routes")
   public RegionService.EligibleRoutes regionRoutes(
@@ -38,14 +45,19 @@ public class TransitController {
     return regions.routes(RegionService.Filter.parse(region));
   }
 
-  /** Live buses on region-eligible routes, wherever in Delhi they currently are. */
+  /**
+   * Live buses on region-eligible routes (optionally one route number) that are currently inside
+   * the area; {@code insideAreaOnly=false} also returns those elsewhere in Delhi.
+   */
   @GetMapping("/buses/regional")
   public RegionService.RegionalBuses regionalBuses(
-      @RequestParam(defaultValue = "ANY") String region) {
-    return regions.buses(RegionService.Filter.parse(region));
+      @RequestParam(defaultValue = "ANY") String region,
+      @RequestParam(defaultValue = "") String routeNumber,
+      @RequestParam(defaultValue = "true") boolean insideAreaOnly) {
+    return regions.buses(RegionService.Filter.parse(region), routeNumber, insideAreaOnly);
   }
 
-  /** Nearby stops served by region-eligible routes, with upcoming buses and labelled ETAs. */
+  /** Nearby stops inside the area served by region-eligible routes, with upcoming buses. */
   @GetMapping("/stops/nearby-regional")
   public RegionService.RegionalStops regionalStops(
       @RequestParam double latitude,
@@ -198,7 +210,7 @@ public class TransitController {
       @RequestParam(defaultValue = "5") int limit) {
     coordinates(latitude, longitude);
     double radius = Math.max(100, Math.min(5000, radiusMeters));
-    int cap = Math.min(limit, 20);
+    int cap = Math.max(1, Math.min(limit, 20));
 
     // 1. Get stops within radius from GTFS spatial index, already sorted nearest-first
     List<TransitIndex.Stop> raw = index.nearby(latitude, longitude, radius);

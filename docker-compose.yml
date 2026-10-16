@@ -1,0 +1,69 @@
+# Full production-like stack on one machine: Postgres + Redis + API (prod profile)
+# + frontend (nginx). Usage:
+#   cp .env.example .env    # then fill in the values
+#   docker compose up --build
+# App: http://localhost:8081   API: http://localhost:8080/api   Health: http://localhost:8080/actuator/health
+#
+# GTFS.zip is stored in Git LFS: run `git lfs pull` first or the backend image build stops.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dtc_bus_tracker
+      POSTGRES_USER: dtc_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dtc_pass}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dtc_user -d dtc_bus_tracker"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./BusTracking/backend
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: dtc_bus_tracker
+      PGUSER: dtc_user
+      PGPASSWORD: ${POSTGRES_PASSWORD:-dtc_pass}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      DTC_API_KEY: ${DTC_API_KEY:-}
+      CORS_ALLOWED_ORIGINS: http://localhost:8081
+      # North + North West Delhi only; 0 imports all of Delhi (slow first boot, more memory).
+      GTFS_IMPORT_RADIUS_DEGREES: "0.16"
+    ports:
+      - "8080:8080"
+    volumes:
+      # Keeps what RouteLearner has learned across container restarts.
+      - learned:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./BusTracking/frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  learned:
