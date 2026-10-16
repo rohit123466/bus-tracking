@@ -10,9 +10,10 @@ import org.springframework.web.server.ResponseStatusException;
  * Route-based North / North-West Delhi filtering for the Live Map.
  *
  * <p>A public route number is <em>eligible</em> when any GTFS route carrying that number has at
- * least one stop inside the configured region box ({@link TransitIndex#computeRegions()}).
- * Eligibility never depends on where a bus currently is. Vehicle positions come only from the
- * realtime snapshot; nothing here simulates or invents a position or an arrival time.
+ * least one stop inside the configured region box ({@link TransitIndex#computeRegions()}). The
+ * Live Map additionally shows only buses currently inside the selected area, and only stops that
+ * lie inside it. Vehicle positions come only from the realtime snapshot; nothing here simulates or
+ * invents a position or an arrival time.
  */
 @Service
 public class RegionService {
@@ -35,6 +36,11 @@ public class RegionService {
 
   /** Below this speed an instantaneous-speed arrival estimate is meaningless. */
   static final double MIN_ESTIMATE_SPEED_KMH = 5;
+  /**
+   * Assumed average speed of a Delhi city bus including stops and signals, used for an approaching
+   * bus that is momentarily stopped or slow. Labelled as such wherever it is shown.
+   */
+  static final double TYPICAL_BUS_SPEED_KMH = 17;
   /** Longer chains than this are not offered as an estimate. */
   static final double MAX_ESTIMATE_MINUTES = 90;
   /** A "next stop" farther than this from the bus contradicts the reported sequence. */
@@ -50,6 +56,7 @@ public class RegionService {
 
   public static final String SOURCE_FEED = "FEED_STOP_SEQUENCE";
   public static final String SOURCE_INFERRED = "INFERRED_FROM_GPS_ON_ROUTE";
+  public static final String SOURCE_LEARNED = "LEARNED_ROUTE_PATH";
 
   public record RegionalBus(
       String vehicleId,
@@ -80,7 +87,9 @@ public class RegionService {
       boolean feedAvailable,
       String region,
       int eligibleRouteCount,
-      int excludedByRegion) {}
+      int excludedByRegion,
+      /** Buses on eligible routes hidden because they are currently outside the area. */
+      int excludedOutsideArea) {}
 
   public record EligibleRoutes(
       String region,
@@ -96,7 +105,13 @@ public class RegionService {
       String label,
       String reason,
       Integer remainingStops,
-      long lastGpsUpdate) {}
+      long lastGpsUpdate,
+      /** Current GPS position, wherever in Delhi the bus is; null when the feed has none. */
+      Double busLatitude,
+      Double busLongitude,
+      Double speedKmh,
+      /** Distance still to travel to the stop along the route's stops; null when unknown. */
+      Double distanceMeters) {}
 
   public record RegionalStop(
       String id,
@@ -120,14 +135,20 @@ public class RegionService {
   private final TransitIndex index;
   private final LiveTransitService transit;
   private final RealtimeSnapshot live;
+  private final RouteLearner learner;
 
-  public RegionService(TransitIndex index, LiveTransitService transit, RealtimeSnapshot live) {
+  public RegionService(
+      TransitIndex index, LiveTransitService transit, RealtimeSnapshot live, RouteLearner learner) {
     this.index = index;
     this.transit = transit;
     this.live = live;
+    this.learner = learner;
   }
 
-  /** Public route number -> union of regions across every GTFS route that carries it. */
+  /**
+   * Public route number -> union of regions across every GTFS route that carries it, from its
+   * static GTFS stops and from the stops on its learned (actually driven) path.
+   */
   Map<String, EnumSet<TransitIndex.Region>> regionsByNumber() {
     Map<String, EnumSet<TransitIndex.Region>> out = new HashMap<>();
     for (var e : index.routeRegions.entrySet()) {
@@ -136,7 +157,69 @@ public class RegionService {
       out.computeIfAbsent(route.number(), k -> EnumSet.noneOf(TransitIndex.Region.class))
           .addAll(e.getValue());
     }
+    for (var learned : learner.routes()) {
+      var route = index.routes.get(learned.routeId());
+      if (route == null || route.number() == null) continue;
+      var here = learnedRegions(learned);
+      if (!here.isEmpty())
+        out.computeIfAbsent(route.number(), k -> EnumSet.noneOf(TransitIndex.Region.class))
+            .addAll(here);
+    }
     return out;
+  }
+
+  private record CachedRegions(RouteLearner.LearnedRoute path, EnumSet<TransitIndex.Region> regions) {}
+
+  /** route_id -> regions of its learned path's stops; recomputed only when the path is replaced. */
+  private final Map<String, CachedRegions> learnedRegionCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+  EnumSet<TransitIndex.Region> learnedRegions(RouteLearner.LearnedRoute learned) {
+    var cached = learnedRegionCache.get(learned.routeId());
+    if (cached != null && cached.path() == learned) return cached.regions();
+    EnumSet<TransitIndex.Region> here = EnumSet.noneOf(TransitIndex.Region.class);
+    for (var ls : learned.stops()) {
+      var s = index.stops.get(ls.stopId());
+      if (s != null) here.addAll(index.regionsAt(s.lat(), s.lng()));
+    }
+    learnedRegionCache.put(learned.routeId(), new CachedRegions(learned, here));
+    return here;
+  }
+
+  /** GTFS route_ids whose learned path passes the stop. */
+  Set<String> learnedRoutesAt(String stopId) {
+    Set<String> out = new HashSet<>();
+    for (var learned : learner.routes())
+      if (learned.stop(stopId) != null) out.add(learned.routeId());
+    return out;
+  }
+
+  record OnPath(RouteLearner.LearnedRoute route, RouteLearner.Located at) {}
+
+  /**
+   * The vehicle's position on its route's learned path; null when the route has none, the bus is
+   * not on it, or the bus is moving against the path's direction.
+   */
+  OnPath onLearnedPath(RealtimeSnapshot.Vehicle v, TransitIndex.Route route) {
+    if (route == null) return null;
+    var learned = learner.route(route.id());
+    if (learned == null) return null;
+    var at = learned.locate(v.lat(), v.lng());
+    if (at.offset() > RouteLearner.MAX_BUS_OFFSET_METERS) return null;
+    Double heading =
+        v.bearing() != null && v.speedKmh() != null && v.speedKmh() > 3
+            ? v.bearing()
+            : learner.heading(v.id());
+    if (heading != null) {
+      double delta = Math.abs(heading - at.bearing());
+      if (Math.min(delta, 360 - delta) > 100) return null;
+    }
+    return new OnPath(learned, at);
+  }
+
+  /** Minutes the learned drive took between two positions; null beyond the upcoming horizon. */
+  static Double learnedMinutes(RouteLearner.LearnedRoute route, double fromAlong, double toAlong) {
+    double minutes = Math.max(0, route.secondsAt(toAlong) - route.secondsAt(fromAlong)) / 60;
+    return minutes <= MAX_ESTIMATE_MINUTES ? minutes : null;
   }
 
   static boolean matches(EnumSet<TransitIndex.Region> regions, Filter filter) {
@@ -162,21 +245,46 @@ public class RegionService {
         filter.name(),
         List.copyOf(eligibleNumbers(filter)),
         def,
-        "A route is eligible when at least one of its GTFS stops lies inside the region box.");
+        "A route is eligible when at least one of its GTFS stops, or a stop on the path its buses"
+            + " were seen driving, lies inside the region box.");
   }
 
+  /** True when the point lies inside the area(s) the filter selects. */
+  boolean insideArea(double lat, double lng, Filter filter) {
+    var here = index.regionsAt(lat, lng);
+    return switch (filter) {
+      case NORTH -> here.contains(TransitIndex.Region.NORTH);
+      case NORTH_WEST -> here.contains(TransitIndex.Region.NORTH_WEST);
+      case ANY -> !here.isEmpty();
+    };
+  }
+
+  /** Live buses on eligible routes that are currently inside the selected area. */
   public RegionalBuses buses(Filter filter) {
-    var all = transit.buses("");
+    return buses(filter, "", true);
+  }
+
+  /**
+   * Live buses on region-eligible routes, optionally narrowed to one public route number. With
+   * {@code insideAreaOnly}, a bus must also be inside the selected area right now; otherwise it is
+   * kept wherever in Delhi it is.
+   */
+  public RegionalBuses buses(Filter filter, String routeNumber, boolean insideAreaOnly) {
+    var all = transit.buses(routeNumber == null ? "" : routeNumber);
     var byNumber = regionsByNumber();
     Set<String> eligible = eligibleNumbers(filter);
     Map<String, RealtimeSnapshot.Vehicle> vehicles = new HashMap<>();
     for (var v : transit.liveVehicles()) vehicles.put(v.id(), v);
 
     List<RegionalBus> out = new ArrayList<>();
-    int excluded = 0;
+    int excluded = 0, outsideArea = 0;
     for (var b : all.buses()) {
       if (!eligible.contains(b.routeCode())) {
         excluded++;
+        continue;
+      }
+      if (insideAreaOnly && !insideArea(b.busLatitude(), b.busLongitude(), filter)) {
+        outsideArea++;
         continue;
       }
       var regions =
@@ -194,7 +302,7 @@ public class RegionService {
               next == null ? null : next.source(),
               next == null ? null : next.distance(),
               next == null ? null : next.etaMinutes(),
-              next == null || next.etaMinutes() == null ? null : "STOP_CHAIN_ESTIMATE"));
+              next == null || next.etaMinutes() == null ? null : next.basis()));
     }
     List<String> warnings = new ArrayList<>(all.warnings());
     long unknownTrips = out.stream().filter(b -> !index.trips.containsKey(b.tripId())).count();
@@ -206,10 +314,11 @@ public class RegionService {
       warnings.add("No GTFS route has a stop inside the configured North/North-West boxes.");
     return new RegionalBuses(
         out, warnings, all.fetchedAt(), all.feedAvailable(), filter.name(), eligible.size(),
-        excluded);
+        excluded, outsideArea);
   }
 
-  record Next(TransitIndex.Stop stop, double distance, Double etaMinutes, String source) {}
+  record Next(
+      TransitIndex.Stop stop, double distance, Double etaMinutes, String source, String basis) {}
 
   /**
    * A vehicle's position along its trip, measured on the straight lines joining consecutive stops.
@@ -301,6 +410,21 @@ public class RegionService {
    */
   Next nextStop(RealtimeSnapshot.Vehicle v) {
     if (v == null) return null;
+    // A learned path reflects where the route really runs; prefer it over the static stops.
+    var on = v.sequence() == null ? onLearnedPath(v, transit.route(v)) : null;
+    if (on != null) {
+      double along = on.at().along();
+      for (var ls : on.route().stops()) {
+        if (ls.along() <= along + PASSED_TOLERANCE_METERS) continue;
+        var s = index.stops.get(ls.stopId());
+        if (s == null) continue;
+        return new Next(
+            s, Math.round((ls.along() - along) * 10.0) / 10.0,
+            learnedMinutes(on.route(), along, ls.along()), SOURCE_LEARNED,
+            "LEARNED_ROUTE_ESTIMATE");
+      }
+      return null; // past the last stop on the learned path
+    }
     var trip = index.trips.get(v.tripId());
     TransitIndex.Stop stop = null;
     String source;
@@ -325,7 +449,7 @@ public class RegionService {
     double dist = Geometry.distance(v.lat(), v.lng(), stop.lat(), stop.lng());
     Double eta = null;
     if (dist <= MAX_NEXT_STOP_METERS && usableSpeed(v)) eta = dist / 1000.0 / v.speedKmh() * 60;
-    return new Next(stop, Math.round(dist * 10.0) / 10.0, eta, source);
+    return new Next(stop, Math.round(dist * 10.0) / 10.0, eta, source, "STOP_CHAIN_ESTIMATE");
   }
 
   private static boolean usableSpeed(RealtimeSnapshot.Vehicle v) {
@@ -362,11 +486,81 @@ public class RegionService {
       "Rough estimate: straight-line distance between stops at current speed; ignores traffic and"
           + " dwell time";
 
+  static final String LEARNED_LABEL =
+      "Estimate from how long a bus on this route recently took for the same stretch (route path"
+          + " learned from live GPS)";
+
+  static final String TYPICAL_SPEED_LABEL =
+      "Rough estimate: bus is stopped or slow right now, so its distance along the route is divided"
+          + " by a typical city-bus speed of " + (int) TYPICAL_BUS_SPEED_KMH + " km/h";
+
+  /** Builds an {@link Upcoming}, attaching the vehicle's live position when it is known. */
+  static Upcoming upcomingOf(
+      String routeNumber, String vehicleId, Double eta, String availability, String label,
+      String reason, Integer remainingStops, long lastGps, RealtimeSnapshot.Vehicle v,
+      Double distanceMeters) {
+    return new Upcoming(
+        routeNumber, vehicleId, eta, availability, label, reason, remainingStops, lastGps,
+        v == null ? null : v.lat(), v == null ? null : v.lng(), v == null ? null : v.speedKmh(),
+        distanceMeters == null ? null : Math.round(distanceMeters * 10.0) / 10.0);
+  }
+
+  /**
+   * Per-request cache of the live vehicles grouped by route and of where each sits on its route.
+   * Neither depends on the stop, so looking up many nearby stops resolves every vehicle once and
+   * each stop only visits the vehicles of routes that serve it.
+   */
+  final class Memo {
+    private final Map<String, Optional<OnPath>> learned = new HashMap<>();
+    private final Map<String, Optional<Progress>> located = new HashMap<>();
+    private Map<String, RealtimeSnapshot.Vehicle> vehicles;
+    /** GTFS route_id -> fresh, not-cancelled vehicles resolved to it. */
+    private Map<String, List<RealtimeSnapshot.Vehicle>> byRoute;
+
+    private void build() {
+      if (vehicles != null) return;
+      vehicles = new HashMap<>();
+      byRoute = new HashMap<>();
+      for (var v : transit.liveVehicles()) {
+        vehicles.put(v.id(), v);
+        if (!RealtimeSnapshot.fresh(v.timestamp()) || live.cancelled(v.tripId())) continue;
+        var route = transit.route(v);
+        if (route == null || route.number() == null) continue;
+        byRoute.computeIfAbsent(route.id(), k -> new ArrayList<>()).add(v);
+      }
+    }
+
+    Map<String, RealtimeSnapshot.Vehicle> vehicles() {
+      build();
+      return vehicles;
+    }
+
+    List<RealtimeSnapshot.Vehicle> onRoute(String routeId) {
+      build();
+      return byRoute.getOrDefault(routeId, List.of());
+    }
+
+    OnPath onLearnedPath(RealtimeSnapshot.Vehicle v, TransitIndex.Route route) {
+      return learned
+          .computeIfAbsent(v.id(), k -> Optional.ofNullable(RegionService.this.onLearnedPath(v, route)))
+          .orElse(null);
+    }
+
+    Progress locateVehicle(RealtimeSnapshot.Vehicle v, TransitIndex.Route route) {
+      return located
+          .computeIfAbsent(v.id(), k -> Optional.ofNullable(RegionService.this.locateVehicle(v, route)))
+          .orElse(null);
+    }
+  }
+
   List<Upcoming> upcoming(String stopId, Set<String> eligible, List<String> warnings) {
+    return upcoming(stopId, eligible, warnings, new Memo());
+  }
+
+  List<Upcoming> upcoming(String stopId, Set<String> eligible, List<String> warnings, Memo memo) {
     var arrivals = transit.arrivals(stopId);
     for (String w : arrivals.warnings()) if (!warnings.contains(w)) warnings.add(w);
-    Map<String, RealtimeSnapshot.Vehicle> vehicles = new HashMap<>();
-    for (var v : transit.liveVehicles()) vehicles.put(v.id(), v);
+    var vehicles = memo.vehicles();
 
     List<Upcoming> out = new ArrayList<>();
     Set<String> handled = new HashSet<>();
@@ -377,12 +571,13 @@ public class RegionService {
       if (a.etaMinutes() != null) {
         boolean tripUpdate = "TRIP_UPDATE".equals(a.predictionAvailability());
         out.add(
-            new Upcoming(
+            upcomingOf(
                 a.routeNumber(), a.vehicleId(), a.etaMinutes(), a.predictionAvailability(),
                 tripUpdate
                     ? "Live prediction (GTFS-Realtime TripUpdates)"
                     : "Estimate from route geometry and live speed",
-                a.reason(), a.remainingStops(), a.lastGpsUpdate()));
+                a.reason(), a.remainingStops(), a.lastGpsUpdate(), vehicles.get(a.vehicleId()),
+                null));
         continue;
       }
       Double chain = null;
@@ -398,41 +593,66 @@ public class RegionService {
       }
       out.add(
           chain != null
-              ? new Upcoming(a.routeNumber(), a.vehicleId(), chain, "STOP_CHAIN_ESTIMATE",
-                  CHAIN_LABEL, null, a.remainingStops(), a.lastGpsUpdate())
-              : new Upcoming(a.routeNumber(), a.vehicleId(), null, "UNAVAILABLE",
-                  "ETA unavailable", a.reason(), a.remainingStops(), a.lastGpsUpdate()));
+              ? upcomingOf(a.routeNumber(), a.vehicleId(), chain, "STOP_CHAIN_ESTIMATE",
+                  CHAIN_LABEL, null, a.remainingStops(), a.lastGpsUpdate(), v, null)
+              : upcomingOf(a.routeNumber(), a.vehicleId(), null, "UNAVAILABLE",
+                  "ETA unavailable", a.reason(), a.remainingStops(), a.lastGpsUpdate(), v, null));
     }
 
-    // 2. Feeds without current_stop_sequence: locate the bus on its trip's stop path.
-    Set<String> serving = index.routesAtStop.getOrDefault(stopId, Set.of());
-    for (var v : vehicles.values()) {
-      if (handled.contains(v.id())
-          || v.sequence() != null
-          || !RealtimeSnapshot.fresh(v.timestamp())
-          || live.cancelled(v.tripId())) continue;
-      var route = transit.route(v);
+    // 2. Learned paths: where the route really runs and how long its buses took, from watching
+    //    them drive. The bus must be on the path, heading along it, with the stop still ahead.
+    for (String routeId : learnedRoutesAt(stopId)) {
+      var route = index.routes.get(routeId);
       if (route == null || route.number() == null || !eligible.contains(route.number())) continue;
-      if (!serving.contains(route.id())) continue;
-      var progress = locateVehicle(v, route);
-      if (progress == null) continue;
-      int target = progress.indexOf(stopId);
-      if (target < 0) continue;
-      double remaining = progress.cumulative()[target] - progress.along();
-      if (remaining < -PASSED_TOLERANCE_METERS) continue; // already passed this stop
-      remaining = Math.max(0, remaining);
-      int stopsBetween = 0;
-      for (int i = 0; i < target; i++)
-        if (progress.cumulative()[i] > progress.along() + PASSED_TOLERANCE_METERS) stopsBetween++;
-      Double eta = usableSpeed(v) ? remaining / 1000.0 / v.speedKmh() * 60 : null;
-      if (eta != null && eta > MAX_ESTIMATE_MINUTES) continue; // too far to call "upcoming"
-      out.add(
-          eta != null
-              ? new Upcoming(route.number(), v.id(), eta, "STOP_CHAIN_ESTIMATE",
-                  CHAIN_LABEL + "; position matched to the route's stops",
-                  null, stopsBetween, v.timestamp())
-              : new Upcoming(route.number(), v.id(), null, "UNAVAILABLE", "ETA unavailable",
-                  "Bus is stationary or its speed is unknown.", stopsBetween, v.timestamp()));
+      var learned = learner.route(routeId);
+      var target = learned == null ? null : learned.stop(stopId);
+      if (target == null) continue;
+      for (var v : memo.onRoute(routeId)) {
+        if (handled.contains(v.id())) continue;
+        var on = memo.onLearnedPath(v, route);
+        if (on == null) continue;
+        double along = on.at().along();
+        double remaining = target.along() - along;
+        if (remaining < -PASSED_TOLERANCE_METERS) continue; // already passed this stop
+        Double eta = learnedMinutes(learned, along, target.along());
+        if (eta == null) continue; // too far to call "upcoming"
+        handled.add(v.id());
+        out.add(
+            upcomingOf(route.number(), v.id(), eta, "LEARNED_ROUTE_ESTIMATE", LEARNED_LABEL, null,
+                learned.stopsBetween(along + PASSED_TOLERANCE_METERS, target.along()),
+                v.timestamp(), v, Math.max(0, remaining)));
+      }
+    }
+
+    // 3. Feeds without current_stop_sequence: locate the bus on its trip's stop path.
+    for (String routeId : index.routesAtStop.getOrDefault(stopId, Set.of())) {
+      var route = index.routes.get(routeId);
+      if (route == null || route.number() == null || !eligible.contains(route.number())) continue;
+      for (var v : memo.onRoute(routeId)) {
+        if (handled.contains(v.id()) || v.sequence() != null) continue;
+        var progress = memo.locateVehicle(v, route);
+        if (progress == null) continue;
+        int target = progress.indexOf(stopId);
+        if (target < 0) continue;
+        double remaining = progress.cumulative()[target] - progress.along();
+        if (remaining < -PASSED_TOLERANCE_METERS) continue; // already passed this stop
+        remaining = Math.max(0, remaining);
+        int stopsBetween = 0;
+        for (int i = 0; i < target; i++)
+          if (progress.cumulative()[i] > progress.along() + PASSED_TOLERANCE_METERS) stopsBetween++;
+        // Moving: current speed. Stopped or slow (signal, stop, jam): a typical city-bus speed.
+        boolean moving = usableSpeed(v);
+        double eta = remaining / 1000.0 / (moving ? v.speedKmh() : TYPICAL_BUS_SPEED_KMH) * 60;
+        if (eta > MAX_ESTIMATE_MINUTES) continue; // too far to call "upcoming"
+        out.add(
+            moving
+                ? upcomingOf(route.number(), v.id(), eta, "STOP_CHAIN_ESTIMATE",
+                    CHAIN_LABEL + "; position matched to the route's stops",
+                    null, stopsBetween, v.timestamp(), v, remaining)
+                : upcomingOf(route.number(), v.id(), eta, "TYPICAL_SPEED_ESTIMATE",
+                    TYPICAL_SPEED_LABEL, "Bus is stationary or its speed is unknown.", stopsBetween,
+                    v.timestamp(), v, remaining));
+      }
     }
 
     out.sort(
@@ -444,14 +664,19 @@ public class RegionService {
   public RegionalStops nearbyStops(
       double lat, double lng, double radiusMeters, int limit, Filter filter) {
     double radius = Math.max(100, Math.min(5000, radiusMeters));
-    int cap = Math.max(1, Math.min(limit, 20));
+    // Up to 60 stops: within 1 km of a busy junction there are often 30+ (one per road side).
+    int cap = Math.max(1, Math.min(limit, 60));
     Set<String> eligible = eligibleNumbers(filter);
     List<String> warnings = new ArrayList<>();
     List<RegionalStop> stops = new ArrayList<>();
+    var memo = new Memo();
     for (var s : index.nearby(lat, lng, radius)) {
       if (stops.size() >= cap) break;
+      if (!insideArea(s.lat(), s.lng(), filter)) continue;
+      Set<String> serving = new HashSet<>(index.routesAtStop.getOrDefault(s.id(), Set.of()));
+      serving.addAll(learnedRoutesAt(s.id()));
       List<String> numbers =
-          index.routesAtStop.getOrDefault(s.id(), Set.of()).stream()
+          serving.stream()
               .map(index.routes::get)
               .filter(Objects::nonNull)
               .map(TransitIndex.Route::number)
@@ -461,7 +686,7 @@ public class RegionService {
               .toList();
       if (numbers.isEmpty()) continue;
       double dist = Geometry.distance(lat, lng, s.lat(), s.lng());
-      var upcoming = upcoming(s.id(), Set.copyOf(numbers), warnings);
+      var upcoming = upcoming(s.id(), Set.copyOf(numbers), warnings, memo);
       stops.add(
           new RegionalStop(
               s.id(), s.name(), s.lat(), s.lng(),
@@ -470,7 +695,7 @@ public class RegionService {
               "STRAIGHT_LINE_ESTIMATE",
               numbers,
               upcoming.size(),
-              upcoming.stream().limit(5).toList()));
+              upcoming)); // every tracked arrival, so each route at the stop gets its times
     }
     return new RegionalStops(stops, radius, transit.feedAvailable(), filter.name(), warnings);
   }

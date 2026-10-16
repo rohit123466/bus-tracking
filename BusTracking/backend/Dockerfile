@@ -18,11 +18,18 @@ RUN mvn -B -q package -DskipTests
 # Runtime stage
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+
+# Run as an unprivileged user. ./data holds the learned-routes file (RouteLearner),
+# so it must be writable by that user.
+RUN groupadd --system app && useradd --system --gid app --home-dir /app app \
+    && mkdir -p /app/data && chown -R app:app /app
+COPY --from=build --chown=app:app /app/target/*.jar app.jar
+USER app
 
 ENV SPRING_PROFILES_ACTIVE=prod
-# Size the heap from the container limit (Render instances are small).
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=65 -XX:+UseSerialGC"
+# Size the heap from the container limit (Render instances are small), and exit on
+# OutOfMemoryError so the platform restarts a clean process instead of a broken one.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"
 
 # Render injects PORT; application-prod.properties binds server.port to it.
 EXPOSE 8080

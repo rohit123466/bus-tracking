@@ -11,8 +11,10 @@ import {
   MapContainer, TileLayer, Marker, Popup, Polyline,
   Circle, ZoomControl, useMap,
 } from 'react-leaflet';
-import { userIcon, stopIconFor, busIcon, selectedBusIcon, liveBusIcon } from '../utils/leafletIcons';
-import { busFreshness, etaText, FRESHNESS_TEXT } from '../utils/liveMap';
+import {
+  userIcon, stopIconFor, busIcon, selectedBusIcon, liveBusIcon, approachingBusIcon,
+} from '../utils/leafletIcons';
+import { busFreshness, distanceText, etaText, ETA_BASIS_TEXT, FRESHNESS_TEXT } from '../utils/liveMap';
 import WheelchairBadge from './WheelchairBadge';
 
 const DELHI_CENTER = [28.6139, 77.209];
@@ -56,6 +58,25 @@ function RecenterOnFirstFix({ userLocation, onLocate, locating }) {
   );
 }
 
+/** Zooms the map out to fit the user and every bus heading to their nearby stops. */
+function ShowApproachingButton({ userLocation, approaching }) {
+  const map = useMap();
+  if (!approaching?.length) return null;
+  return (
+    <button
+      type="button"
+      className="approaching-btn"
+      onClick={() => {
+        const points = approaching.flatMap(b => [[b.busLatitude, b.busLongitude], [b.stopLat, b.stopLng]]);
+        if (userLocation) points.push([userLocation.lat, userLocation.lng]);
+        map.fitBounds(points, { padding: [40, 40], maxZoom: 16 });
+      }}
+    >
+      🚍 {approaching.length} bus{approaching.length !== 1 ? 'es' : ''} coming to your stops
+    </button>
+  );
+}
+
 function formatAge(epochSeconds) {
   if (!epochSeconds) return 'unknown';
   const s = Math.floor(Date.now() / 1000 - epochSeconds);
@@ -78,12 +99,16 @@ export default function BusMap({
   onLocate,          // Live Map only: () => Promise<location|null> for the Locate Me button
   locating,
   liveStatus,        // Live Map only: freshness-coloured route-number markers + richer popup
+  approachingBuses,  // Live Map only: buses heading to the user's nearby stops, anywhere in Delhi
 }) {
   const busesAtStop = (stopName) => buses.filter((b) => b.stopName === stopName);
+  const approachingIds = new Set((approachingBuses ?? []).map((b) => b.vehicleId));
 
-  // Deduplicate by vehicleId — keep first (nearest / lowest alphabetically)
+  // Deduplicate by vehicleId — keep first (nearest / lowest alphabetically). Buses coming to the
+  // user's stops get their own highlighted marker below instead.
   const uniqueBuses = Array.from(new Map(buses.map((b) => [b.vehicleId, b])).values())
-    .filter((b) => Number.isFinite(b.busLatitude) && Number.isFinite(b.busLongitude));
+    .filter((b) => Number.isFinite(b.busLatitude) && Number.isFinite(b.busLongitude))
+    .filter((b) => !approachingIds.has(b.vehicleId));
 
   return (
     <MapContainer center={DELHI_CENTER} zoom={13} zoomControl={false} style={{ height: '100%', width: '100%' }}>
@@ -93,6 +118,7 @@ export default function BusMap({
       />
       <ZoomControl position="bottomright" />
       <RecenterOnFirstFix userLocation={userLocation} onLocate={onLocate} locating={locating} />
+      <ShowApproachingButton userLocation={userLocation} approaching={approachingBuses} />
 
       {/* User location */}
       {userLocation && (
@@ -220,13 +246,16 @@ export default function BusMap({
                     {bus.nextStopSource === 'INFERRED_FROM_GPS_ON_ROUTE' && (
                       <span style={{ color: '#888' }}> (inferred from GPS position on route)</span>
                     )}
+                    {bus.nextStopSource === 'LEARNED_ROUTE_PATH' && (
+                      <span style={{ color: '#888' }}> (on the path this route&apos;s buses were seen driving)</span>
+                    )}
                   </div>
                   {bus.nextStopName && (
                     <div>
                       <strong>ETA:</strong>{' '}
                       {bus.nextStopEtaMinutes != null
                         ? <>{etaText({ etaMinutes: bus.nextStopEtaMinutes, availability: bus.nextStopEtaBasis })}
-                            <span style={{ color: '#888' }}> (rough estimate from current speed)</span></>
+                            <span style={{ color: '#888' }}> ({ETA_BASIS_TEXT[bus.nextStopEtaBasis] ?? 'rough estimate'})</span></>
                         : 'ETA unavailable'}
                     </div>
                   )}
@@ -295,6 +324,40 @@ export default function BusMap({
           </Marker>
         );
       })}
+
+      {/* Buses heading to the user's nearby stops — shown wherever in Delhi they are right now */}
+      {approachingBuses?.map((b) => (
+        <Marker
+          key={'approaching-' + b.vehicleId}
+          position={[b.busLatitude, b.busLongitude]}
+          icon={approachingBusIcon(b.routeNumber, etaText(b))}
+          zIndexOffset={2000}
+          riseOnHover
+        >
+          <Popup>
+            <strong>Route {b.routeNumber}</strong> → coming to <strong>{b.stopName}</strong>
+            <div style={{ fontSize: 12, marginTop: 4 }}>
+              <div>
+                <strong>Reaches your stop in:</strong> {etaText(b)}
+                <div style={{ color: '#888' }}>{b.label}</div>
+              </div>
+              {b.distanceMeters != null && (
+                <div><strong>Distance left on route:</strong> {distanceText(b.distanceMeters)}</div>
+              )}
+              {b.remainingStops != null && (
+                <div><strong>Stops before yours:</strong> {b.remainingStops}</div>
+              )}
+              <div>
+                <strong>Location now:</strong> {b.busLatitude.toFixed(5)}, {b.busLongitude.toFixed(5)}
+                <span style={{ color: '#888' }}> (GPS from DTC feed)</span>
+              </div>
+              {b.speedKmh != null && <div><strong>Speed:</strong> {Math.round(b.speedKmh)} km/h</div>}
+              <div><strong>Last GPS:</strong> {formatAge(b.lastGpsUpdate)}</div>
+              <div style={{ fontSize: 10, color: '#888', marginTop: 3 }}>Vehicle {b.vehicleId}</div>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
 
       {/* Legacy selectedRoute overlay (RouteDetailPage etc.) */}
       {selectedRoute?.stops?.length > 0 && (

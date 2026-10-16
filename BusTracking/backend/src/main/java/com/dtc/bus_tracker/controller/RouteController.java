@@ -1,6 +1,7 @@
 package com.dtc.bus_tracker.controller;
 
 
+import com.dtc.bus_tracker.util.RequestBounds;
 import com.dtc.bus_tracker.dto.RouteDetailResponse;
 import com.dtc.bus_tracker.dto.RouteDto;
 import com.dtc.bus_tracker.entity.Route;
@@ -66,7 +67,7 @@ public class RouteController {
                 .filter(r ->
                     (r.getRouteCode() != null && r.getRouteCode().toLowerCase().startsWith(lowerQuery))
                     || (r.getName() != null && r.getName().toLowerCase().contains(lowerQuery)))
-                .limit(limit)
+                .limit(RequestBounds.limit(limit))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(routes.stream().map(this::toDTO).collect(Collectors.toList()));
     }

@@ -7,7 +7,8 @@ import com.dtc.bus_tracker.exception.ResourceNotFoundException;
 import com.dtc.bus_tracker.mapper.StopMapper;
 import com.dtc.bus_tracker.repository.StopRepository;
 import com.dtc.bus_tracker.service.StopDetailService;
-import com.dtc.bus_tracker.util.GeoUtils;  // ← This import now works
+import com.dtc.bus_tracker.util.GeoUtils;
+import com.dtc.bus_tracker.util.RequestBounds;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,7 +31,7 @@ public class StopController {
     @GetMapping
     public ResponseEntity<Page<StopDto>> getAllStops(@RequestParam(defaultValue = "0") int page,
                                                      @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(RequestBounds.page(page), RequestBounds.pageSize(size));
         Page<Stop> stops = stopRepository.findAll(pageable);
         return ResponseEntity.ok(stops.map(this::toDto));
     }
@@ -54,13 +55,14 @@ public class StopController {
                                                         @RequestParam double lng,
                                                         @RequestParam(defaultValue = "5000") double radiusMeters,
                                                         @RequestParam(defaultValue = "10") int limit) {
+        double radius = RequestBounds.radius(radiusMeters);
         List<Stop> allStops = stopRepository.findAll();
         List<Stop> nearby = allStops.stream()
-                .filter(s -> GeoUtils.haversine(lat, lng, s.getLatitude(), s.getLongitude()) <= radiusMeters)
+                .filter(s -> GeoUtils.haversine(lat, lng, s.getLatitude(), s.getLongitude()) <= radius)
                 .sorted((s1, s2) -> Double.compare(
                         GeoUtils.haversine(lat, lng, s1.getLatitude(), s1.getLongitude()),
                         GeoUtils.haversine(lat, lng, s2.getLatitude(), s2.getLongitude())))
-                .limit(limit)
+                .limit(RequestBounds.limit(limit))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(nearby.stream().map(this::toDto).collect(Collectors.toList()));
     }

@@ -1,10 +1,12 @@
 package com.dtc.bus_tracker.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -16,6 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @ControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -46,7 +49,7 @@ public class GlobalExceptionHandler {
     }
 
     // Unique-constraint races (e.g. the same ticket request id submitted twice
-    // concurrently) - without this they'd fall through to the 404 below.
+    // concurrently) - without this they'd fall through to the 500 below.
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException ex) {
         return errorBody(HttpStatus.CONFLICT, "Conflict",
@@ -74,7 +77,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RuntimeException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException ex) {
-        return errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", "An unexpected server error occurred.");
+        return handleGenericException(ex);
     }
 
     private ResponseEntity<Map<String, Object>> errorBody(HttpStatus status, String error, String message) {
@@ -89,6 +92,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
+        // Spring MVC's own client errors (missing query parameter, unknown URL,
+        // wrong HTTP method, unsupported content type) carry their status; keep it
+        // instead of reporting them as server failures.
+        if (ex instanceof ErrorResponse errorResponse) {
+            var status = HttpStatus.valueOf(errorResponse.getStatusCode().value());
+            String detail = errorResponse.getBody().getDetail();
+            return errorBody(status, status.getReasonPhrase(), detail != null ? detail : status.getReasonPhrase());
+        }
+        log.error("Unhandled exception", ex);
         return errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", "An unexpected server error occurred.");
     }
 }

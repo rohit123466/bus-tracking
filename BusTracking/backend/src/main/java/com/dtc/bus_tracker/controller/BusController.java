@@ -8,6 +8,7 @@ import com.dtc.bus_tracker.service.BusHistoryService;
 import com.dtc.bus_tracker.service.BusSearchService;
 import com.dtc.bus_tracker.service.NearbyBusService;
 import com.dtc.bus_tracker.service.PassingBusService;
+import com.dtc.bus_tracker.util.RequestBounds;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -31,7 +32,8 @@ public class BusController {
             @RequestParam(defaultValue = "5000") double radiusMeters,
             @RequestParam(defaultValue = "10") int limit) {
 
-        List<NearbyBusResponse> response = nearbyBusService.findNearbyBuses(lat, lng, radiusMeters, limit);
+        List<NearbyBusResponse> response = nearbyBusService.findNearbyBuses(
+                lat, lng, RequestBounds.radius(radiusMeters), RequestBounds.limit(limit));
         return ResponseEntity.ok(response);
     }
 
@@ -51,7 +53,8 @@ public class BusController {
             @RequestParam double lng,
             @RequestParam(defaultValue = "1000") double radiusMeters,
             @RequestParam(defaultValue = "20") int limit) {
-        return ResponseEntity.ok(passingBusService.findBusesPassingNear(lat, lng, radiusMeters, limit));
+        return ResponseEntity.ok(passingBusService.findBusesPassingNear(
+                lat, lng, RequestBounds.radius(radiusMeters), RequestBounds.limit(limit)));
     }
 
     // GET /api/buses/{vehicleId}/history - "Journey Replay": recorded

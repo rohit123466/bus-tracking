@@ -153,8 +153,16 @@ public class TransitIndex {
     cells.computeIfAbsent(cell(s.lat(), s.lng()), k -> new ArrayList<>()).add(s);
   }
 
+  // Parsed once: bounds are checked for every stop and bus on each request.
+  private volatile Bounds parsedNorth, parsedNorthWest;
+
   public Bounds bounds(Region region) {
-    return Bounds.parse(region == Region.NORTH ? northBounds : northWestBounds);
+    if (region == Region.NORTH) {
+      if (parsedNorth == null) parsedNorth = Bounds.parse(northBounds);
+      return parsedNorth;
+    }
+    if (parsedNorthWest == null) parsedNorthWest = Bounds.parse(northWestBounds);
+    return parsedNorthWest;
   }
 
   /** Regions whose box contains the point; empty when the stop is in neither. */

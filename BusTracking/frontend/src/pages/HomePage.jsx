@@ -24,7 +24,7 @@ import useWalkingNavigation from '../hooks/useWalkingNavigation';
 import useUserLocation from '../hooks/useUserLocation';
 import useFavourites from '../hooks/useFavourites';
 import { visibleBuses } from '../utils/navigation';
-import { REGION_OPTIONS, DEFAULT_REGION, isRegional, regionLabel } from '../utils/liveMap';
+import { REGION_OPTIONS, DEFAULT_REGION, regionLabel, learningText } from '../utils/liveMap';
 import './LiveTransit.css';
 
 export default function HomePage() {
@@ -41,6 +41,23 @@ export default function HomePage() {
   const [showFavs, setShowFavs] = useState(false);
   const [showNearby, setShowNearby] = useState(true);
   const [nearbyStops, setNearbyStops] = useState([]);
+  // Buses heading to the nearby stops, with live positions anywhere in Delhi.
+  const [approaching, setApproaching] = useState([]);
+  const [learning, setLearning] = useState(null);
+
+  // ── Route-learning progress (poll every 60s) ───────────────────────────────
+  useEffect(() => {
+    const ctrl = new AbortController(); let timer;
+    const poll = async () => {
+      try {
+        const s = await transitGet('/learning/status', {}, ctrl.signal);
+        if (!ctrl.signal.aborted) setLearning(s);
+      } catch { /* non-critical */ }
+      if (!ctrl.signal.aborted) timer = setTimeout(poll, 60000);
+    };
+    poll();
+    return () => { ctrl.abort(); clearTimeout(timer); };
+  }, []);
 
   const gps = useUserLocation();
   // Pass the selected boarding stop as `targetStop` so walking directions
@@ -63,14 +80,11 @@ export default function HomePage() {
   useEffect(() => {
     const ctrl = new AbortController(); let timer;
     setData({ buses: [], warnings: [] });
-    // A searched route keeps the original endpoint; otherwise show region-eligible routes,
-    // wherever in Delhi their buses currently are.
-    const regional = !routeNumber && isRegional(region);
+    // Only buses currently inside the selected area, on routes that stop there (also when a
+    // single route is searched).
     const poll = async () => {
       try {
-        const result = regional
-          ? await transitGet('/buses/regional', { region }, ctrl.signal)
-          : await transitGet('/buses/live', { routeNumber }, ctrl.signal);
+        const result = await transitGet('/buses/regional', { region, routeNumber }, ctrl.signal);
         if (!ctrl.signal.aborted) { setData(result); setUpdated(new Date()); setError(''); }
       } catch {
         if (!ctrl.signal.aborted) { setData({ buses: [], warnings: [] }); setError('Live bus feed unavailable. Please retry.'); }
@@ -182,7 +196,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Region filter (route-based: a route qualifies by its stops, not the bus's position) */}
+        {/* Region filter: a route qualifies by its stops, and a bus must be inside the area */}
         <label className="region-filter">
           Show routes
           <select
@@ -194,25 +208,27 @@ export default function HomePage() {
           </select>
         </label>
         <p id="region-note" className="region-note">
-          {routeNumber
-            ? `Showing searched route ${routeNumber}; clear it to use the region filter.`
-            : isRegional(region)
-              ? 'Includes buses anywhere in Delhi whose route stops in this area.'
-              : 'All routes with a verified GTFS route number.'}
+          Only buses currently inside this area, on routes that stop here. Buses heading to your
+          nearby stops are shown in blue with their ETA, wherever in Delhi they are.
+          {data.excludedOutsideArea > 0 &&
+            ` ${data.excludedOutsideArea} bus${data.excludedOutsideArea !== 1 ? 'es' : ''} on these routes ${data.excludedOutsideArea !== 1 ? 'are' : 'is'} elsewhere in Delhi (hidden).`}
         </p>
+        {learningText(learning) && (
+          <p className="region-note" title={learning.note}>
+            🧠 {learningText(learning)}. More buses get arrival times as routes are learned.
+          </p>
+        )}
 
         {/* Live bus count */}
         <p role="status">
           <strong>{buses.length} active bus{buses.length !== 1 ? 'es' : ''}</strong>
           {routeNumber
-            ? ` on route ${routeNumber}`
-            : isRegional(region)
-              ? ` on ${data.eligibleRouteCount ?? '…'} ${regionLabel(region).replace(/ routes$/, '')} routes`
-              : ' across mapped routes'}
+            ? ` on route ${routeNumber} in ${regionLabel(region).replace(/ routes$/, '')}`
+            : ` on ${data.eligibleRouteCount ?? '…'} ${regionLabel(region).replace(/ routes$/, '')} routes`}
           {updated && <small> · Updated {updated.toLocaleTimeString()}</small>}
         </p>
         {!buses.length && routeNumber && (
-          <p>No live buses currently reporting for route {routeNumber}.</p>
+          <p>No live buses for route {routeNumber} inside this area right now.</p>
         )}
         {data.feedAvailable === false && (
           <p role="alert" className="transit-warning">
@@ -245,6 +261,7 @@ export default function HomePage() {
             userLocation={gps.location}
             onSelectStop={handleSelectStop}
             onStopsFound={setNearbyStops}
+            onApproachingFound={setApproaching}
             selectedStopId={stop?.id}
             region={region}
           />
@@ -428,6 +445,7 @@ export default function HomePage() {
           walkingRoute={navigation.walk}
           routeMap={routeMap}
           nearbyStops={nearbyStops}
+          approachingBuses={routeNumber ? approaching.filter(b => b.routeNumber === routeNumber) : approaching}
           onSelectStop={handleSelectStop}
           onLocate={gps.locate}
           locating={gps.locating}

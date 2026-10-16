@@ -54,6 +54,21 @@
 .bus-marker.live-bus-delayed{background:#9a6b00;border-style:dashed}
 .live-status{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700;color:#fff}
 .live-status-live{background:#16835b}.live-status-delayed{background:#9a6b00}.live-status-stale{background:#777}
+.bus-marker.approaching-bus-marker{box-sizing:border-box;height:22px;background:#1a56db;border:2px solid #fff;box-shadow:0 0 0 3px #1a56db55;font-weight:700}
+.approaching-btn{position:absolute;top:54px;right:12px;z-index:1000;padding:8px 12px;border-radius:8px;border:1px solid #c7d2fe;background:#fff;color:#1a56db;font-weight:600;cursor:pointer;box-shadow:0 1px 4px #0003}
+.nbs-away{color:#555;white-space:nowrap}
+.nbs-arrivals{margin-top:6px;font-size:12px}
+.nbs-route-table{width:100%;border-collapse:collapse}
+.nbs-route-table th{width:1%;padding:3px 8px 3px 0;text-align:left;vertical-align:top;font-weight:400}
+.nbs-route-table td{padding:3px 0}
+.nbs-buses{display:flex;flex-wrap:wrap;gap:4px 10px}
+.nbs-route-table tr+tr{border-top:1px solid #eee}
+.nbs-bus{display:inline-flex;align-items:center;gap:4px}
+.nbs-bus .nbs-eta{margin-left:0}
+.nbs-idle{margin-top:6px;color:#888}
+.nbs-idle summary{cursor:pointer;font-size:12px}
+.nbs-idle-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.nbs-route-chip-idle{opacity:.6}
 .locate-btn{position:absolute;top:12px;right:12px;z-index:1000;padding:8px 12px;border-radius:8px;border:1px solid #ccc;background:#fff;color:#123a73;font-weight:600;cursor:pointer;box-shadow:0 1px 4px #0003}
 .nbs-upcoming{list-style:none;margin:6px 0 0;padding:0;font-size:12px}
 .nbs-upcoming li{display:flex;align-items:center;gap:6px;margin:3px 0}

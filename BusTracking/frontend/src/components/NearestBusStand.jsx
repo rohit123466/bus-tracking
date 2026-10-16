@@ -18,7 +18,9 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { getNearbyGtfsStops, transitGet } from '../api/client';
-import { isRegional, etaText, ETA_KIND } from '../utils/liveMap';
+import {
+  isRegional, etaText, ETA_KIND, approachingBuses, distanceText, groupStands, arrivalsByRoute,
+} from '../utils/liveMap';
 import './NearestBusStand.css';
 
 const RADIUS_OPTIONS = [
@@ -44,6 +46,7 @@ export default function NearestBusStand({
   onStopsFound,       // (stops) => void — to pin them on the map
   selectedStopId,     // currently selected stop id (for highlight)
   region,             // optional Live Map filter: only stops served by region-eligible routes
+  onApproachingFound, // (buses) => void — buses heading to these stops, with live positions
 }) {
   const regional = isRegional(region);
   const [radius, setRadius]   = useState(1000);
@@ -68,14 +71,16 @@ export default function NearestBusStand({
         const data = regional
           ? await transitGet('/stops/nearby-regional', {
               latitude: userLocation.lat, longitude: userLocation.lng,
-              radiusMeters: radius, limit: 8, region,
+              // Every stop in the radius (a busy junction has 30+ within 1 km).
+              radiusMeters: radius, limit: 60, region,
             }, ctrl.signal)
           : await getNearbyGtfsStops(userLocation.lat, userLocation.lng, radius, 8);
         if (ctrl.signal.aborted) return;
         setResult(data);
         setError('');
-        // Notify parent so stops can be pinned on the map
-        if (onStopsFound) onStopsFound(data.stops);
+        // Notify parent so stops (one marker per stand) can be pinned on the map
+        if (onStopsFound) onStopsFound(regional ? groupStands(data.stops) : data.stops);
+        if (onApproachingFound) onApproachingFound(regional ? approachingBuses(data.stops) : []);
       } catch {
         if (ctrl.signal.aborted) return;
         setError('Could not find nearby stops. Check your connection.');
@@ -106,7 +111,9 @@ export default function NearestBusStand({
     );
   }
 
-  const stops = result?.stops ?? [];
+  // Live Map: one entry per bus stand (both sides of the road merged), nearest first.
+  const stops = regional ? groupStands(result?.stops) : (result?.stops ?? []);
+  const arriving = stops.reduce((n, s) => n + (s.upcoming?.length ?? 0), 0);
 
   return (
     <div className="nbs-panel">
@@ -151,7 +158,7 @@ export default function NearestBusStand({
       {stops.length > 0 && (
         <ul className="nbs-list" aria-label="Nearby bus stands">
           {stops.map((stop, idx) => {
-            const isSelected = stop.id === selectedStopId;
+            const isSelected = (stop.members ?? [stop]).some(m => m.id === selectedStopId);
             return (
               <li
                 key={stop.id}
@@ -189,8 +196,8 @@ export default function NearestBusStand({
                     )}
                   </div>
 
-                  {/* Route chips */}
-                  {stop.routeNumbers.length > 0 && (
+                  {/* Route chips (Live Map shows them per route with arrival times instead) */}
+                  {!regional && stop.routeNumbers.length > 0 && (
                     <div className="nbs-routes" aria-label="Routes at this stop">
                       {stop.routeNumbers.slice(0, 8).map(r => (
                         <span key={r} className="nbs-route-chip">{r}</span>
@@ -201,28 +208,61 @@ export default function NearestBusStand({
                     </div>
                   )}
 
-                  {/* Live Map regional mode: upcoming buses on eligible routes */}
-                  {regional && stop.upcoming && (
-                    stop.upcoming.length > 0 ? (
-                      <ul className="nbs-upcoming" aria-label="Upcoming buses">
-                        {stop.upcoming.map(u => (
-                          <li key={u.vehicleId} title={u.reason ? `${u.label}. ${u.reason}` : u.label}>
-                            <span className="nbs-route-chip">{u.routeNumber}</span>
-                            {u.remainingStops != null && <span>{u.remainingStops} stops away</span>}
-                            <span className={`nbs-eta nbs-eta-${ETA_KIND[u.availability] ?? 'unavailable'}`}>
-                              {etaText(u)}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <small style={{ color: '#888' }}>
-                        {result?.feedAvailable
-                          ? 'No live bus on these routes is currently tracked towards this stop.'
-                          : 'Live vehicle feed unavailable: showing static route data only.'}
-                      </small>
-                    )
-                  )}
+                  {/* Live Map: arrival times at this stand, grouped by route */}
+                  {regional && (() => {
+                    const { tracked, idle } = arrivalsByRoute(stop);
+                    return (
+                      <div className="nbs-arrivals">
+                        {tracked.length > 0 ? (
+                          <table className="nbs-route-table" aria-label={`Buses arriving at ${stop.name}, by route`}>
+                            <tbody>
+                              {tracked.map(g => (
+                                <tr key={g.routeNumber}>
+                                  <th scope="row"><span className="nbs-route-chip">{g.routeNumber}</span></th>
+                                  <td><div className="nbs-buses">
+                                    {g.buses.map(u => (
+                                      <span
+                                        key={u.vehicleId}
+                                        className="nbs-bus"
+                                        title={[
+                                          u.count > 1 && `${u.count} buses at the same spot, probably waiting at a terminal or depot`,
+                                          u.label, u.reason,
+                                          u.remainingStops != null && `${u.remainingStops} stops before this one`,
+                                        ].filter(Boolean).join('. ')}
+                                      >
+                                        <span className={`nbs-eta nbs-eta-${ETA_KIND[u.availability] ?? 'unavailable'}`}>
+                                          {etaText(u)}
+                                        </span>
+                                        {u.distanceMeters != null && <small className="nbs-away">{distanceText(u.distanceMeters)}</small>}
+                                        {u.count > 1 && <small className="nbs-away">×{u.count}</small>}
+                                      </span>
+                                    ))}
+                                  </div></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <small style={{ color: '#888' }}>
+                            {result?.feedAvailable
+                              ? 'No bus is tracked towards this stand right now.'
+                              : 'Live vehicle feed unavailable: showing static route data only.'}
+                          </small>
+                        )}
+                        {idle.length > 0 && (
+                          // Collapsed: busy stands have 30+ routes; opening it must not select the stand.
+                          <details className="nbs-idle" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+                            <summary>
+                              {tracked.length > 0 ? '+' : ''}{idle.length} route{idle.length !== 1 ? 's' : ''} with no tracked bus right now
+                            </summary>
+                            <div className="nbs-idle-list">
+                              {idle.map(r => <span key={r} className="nbs-route-chip nbs-route-chip-idle">{r}</span>)}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Select chevron */}
@@ -236,7 +276,9 @@ export default function NearestBusStand({
       {/* Refresh indicator */}
       {result && (
         <p className="nbs-footer">
-          {loading ? '↻ Updating…' : `${stops.length} stop${stops.length !== 1 ? 's' : ''} within ${distLabel(radius)}`}
+          {loading ? '↻ Updating…' : regional
+            ? `${stops.length} bus stand${stops.length !== 1 ? 's' : ''} within ${distLabel(radius)} · ${arriving} bus${arriving !== 1 ? 'es' : ''} arriving`
+            : `${stops.length} stop${stops.length !== 1 ? 's' : ''} within ${distLabel(radius)}`}
           {!result.feedAvailable && (
             <span className="nbs-feed-warn"> · Live counts unavailable</span>
           )}

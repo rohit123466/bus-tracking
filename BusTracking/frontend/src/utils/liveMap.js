@@ -1,12 +1,11 @@
 // Live Map helpers: region filter options, GPS freshness and ETA labels.
 // Pure functions so they can be unit-tested with `node --test`.
 
-// `ALL` keeps the original all-routes behaviour; the others hit /api/transit/buses/regional.
+// Every option hits /api/transit/buses/regional, which only returns buses inside the area.
 export const REGION_OPTIONS = [
   { value: 'ANY', label: 'North or North-West Delhi routes' },
   { value: 'NORTH', label: 'North Delhi routes' },
   { value: 'NORTH_WEST', label: 'North-West Delhi routes' },
-  { value: 'ALL', label: 'All Delhi routes' },
 ];
 
 export const DEFAULT_REGION = 'ANY';
@@ -47,5 +46,118 @@ export const ETA_KIND = {
   TRIP_UPDATE: 'live',
   GEOMETRY_ESTIMATE: 'estimate',
   STOP_CHAIN_ESTIMATE: 'estimate',
+  TYPICAL_SPEED_ESTIMATE: 'estimate',
+  LEARNED_ROUTE_ESTIMATE: 'estimate',
   UNAVAILABLE: 'unavailable',
 };
+
+/** Popup note explaining where a bus's next-stop ETA came from. */
+export const ETA_BASIS_TEXT = {
+  LEARNED_ROUTE_ESTIMATE: 'based on how long a bus on this route recently took',
+  STOP_CHAIN_ESTIMATE: 'rough estimate from current speed',
+};
+
+function metresBetween(a, b) {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
+
+/** Same-name stops closer than this are one bus stand (usually one stop per side of the road). */
+export const STAND_MERGE_METERS = 150;
+
+/**
+ * Merges GTFS stops into bus stands: same name and within STAND_MERGE_METERS. Each stand keeps its
+ * nearest stop (for selecting / walking to it), the union of routes, and every arrival once.
+ * Input is nearest-first, so stands are too.
+ */
+export function groupStands(stops) {
+  const stands = [];
+  for (const s of stops ?? []) {
+    const name = (s.name ?? '').trim();
+    const stand = stands.find(x => x.name.toLowerCase() === name.toLowerCase()
+      && x.members.some(m => metresBetween(m, s) <= STAND_MERGE_METERS));
+    if (!stand) {
+      stands.push({ ...s, name, members: [s], routeNumbers: [...(s.routeNumbers ?? [])], upcoming: [...(s.upcoming ?? [])] });
+      continue;
+    }
+    stand.members.push(s);
+    stand.routeNumbers = [...new Set([...stand.routeNumbers, ...(s.routeNumbers ?? [])])];
+    for (const u of s.upcoming ?? []) {
+      const i = stand.upcoming.findIndex(x => x.vehicleId === u.vehicleId);
+      if (i < 0) stand.upcoming.push(u);
+      else if ((u.etaMinutes ?? Infinity) < (stand.upcoming[i].etaMinutes ?? Infinity)) stand.upcoming[i] = u;
+    }
+  }
+  return stands.map(st => ({ ...st, liveCount: st.upcoming.length }));
+}
+
+const byRouteNumber = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+
+/**
+ * Buses of one route standing at the same spot (same distance and ETA) are one entry with a
+ * `count` — usually several buses waiting at a terminal or depot. Input is sorted by ETA.
+ */
+function collapseTogether(buses) {
+  const out = [];
+  for (const b of buses) {
+    const prev = out[out.length - 1];
+    const together = prev && b.distanceMeters != null && prev.distanceMeters != null
+      && Math.abs(b.distanceMeters - prev.distanceMeters) <= 100
+      && Math.abs((b.etaMinutes ?? Infinity) - (prev.etaMinutes ?? Infinity)) <= 1;
+    if (together) prev.count += 1;
+    else out.push({ ...b, count: 1 });
+  }
+  return out;
+}
+
+/**
+ * A stand's arrivals grouped by route: routes with a tracked bus first (soonest first, each with
+ * its buses soonest first), then the routes that stop here with no bus tracked right now.
+ */
+export function arrivalsByRoute(stand) {
+  const groups = new Map();
+  for (const u of stand?.upcoming ?? []) {
+    if (!groups.has(u.routeNumber)) groups.set(u.routeNumber, []);
+    groups.get(u.routeNumber).push(u);
+  }
+  const soonest = list => list[0]?.etaMinutes ?? Infinity;
+  const tracked = [...groups.entries()]
+    .map(([routeNumber, buses]) => ({
+      routeNumber,
+      buses: collapseTogether(buses.sort((a, b) => (a.etaMinutes ?? Infinity) - (b.etaMinutes ?? Infinity))),
+    }))
+    .sort((a, b) => soonest(a.buses) - soonest(b.buses) || byRouteNumber(a.routeNumber, b.routeNumber));
+  const idle = (stand?.routeNumbers ?? []).filter(r => !groups.has(r)).sort(byRouteNumber);
+  return { tracked, idle };
+}
+
+/** "Learned real paths for 120 of 450 routes running now", or null before the first status. */
+export function learningText(status) {
+  if (!status || !status.routesRunningNow) return null;
+  return `Learned real paths for ${status.learnedOfRunning} of ${status.routesRunningNow} routes running now`;
+}
+
+/** "850 m" / "12.4 km" for a distance in metres. */
+export function distanceText(m) {
+  if (m == null || !Number.isFinite(m)) return null;
+  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+}
+
+/**
+ * Buses heading to any of the nearby stops, one entry per vehicle (its soonest stop), each with
+ * a live position. `stops` is the /stops/nearby-regional result's `stops` array.
+ */
+export function approachingBuses(stops) {
+  const byVehicle = new Map();
+  for (const stop of stops ?? []) {
+    for (const u of stop.upcoming ?? []) {
+      if (!Number.isFinite(u.busLatitude) || !Number.isFinite(u.busLongitude)) continue;
+      const entry = { ...u, stopId: stop.id, stopName: stop.name, stopLat: stop.lat, stopLng: stop.lng };
+      const prev = byVehicle.get(u.vehicleId);
+      if (!prev || (u.etaMinutes ?? Infinity) < (prev.etaMinutes ?? Infinity)) byVehicle.set(u.vehicleId, entry);
+    }
+  }
+  return [...byVehicle.values()].sort((a, b) => (a.etaMinutes ?? Infinity) - (b.etaMinutes ?? Infinity));
+}

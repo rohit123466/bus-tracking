@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import NavBar from './components/NavBar';
+import ErrorBoundary from './components/ErrorBoundary';
+import NotFoundPage from './pages/NotFoundPage';
 const HomePage = lazy(() => import('./pages/HomePage'));
 const BusSearchPage = lazy(() => import('./pages/BusSearchPage'));
 const RouteDetailPage = lazy(() => import('./pages/RouteDetailPage'));
@@ -20,7 +22,7 @@ function App() {
       <div className="app-shell">
         <NavBar />
         <div className="page-outlet">
-          <Suspense fallback={<p role="status">Loading…</p>}><Routes>
+          <ErrorBoundary><Suspense fallback={<p role="status">Loading…</p>}><Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/accessibility" element={<AccessibilityPage />} />
             <Route path="/search" element={<BusSearchPage />} />
@@ -32,7 +34,8 @@ function App() {
             <Route path="/seats" element={<SeatAvailabilityPage />} />
             <Route path="/conductor" element={<ConductorPage />} />
             <Route path="/admin" element={<AdminDashboardPage />} />
-          </Routes></Suspense>
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes></Suspense></ErrorBoundary>
         </div>
       </div>
     </BrowserRouter>

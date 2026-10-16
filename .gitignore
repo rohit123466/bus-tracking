@@ -9,3 +9,6 @@ dist/
 data/
 *.log
 *.pid
+
+# Local debug dumps of the realtime feed
+*.pb
