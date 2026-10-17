@@ -23,7 +23,7 @@ jobs:
       # No LFS fetch: no test reads GTFS.zip, and skipping it saves ~55 MB of
       # LFS bandwidth per run (GitHub's free LFS quota is 1 GB/month).
       - uses: actions/checkout@v7
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
