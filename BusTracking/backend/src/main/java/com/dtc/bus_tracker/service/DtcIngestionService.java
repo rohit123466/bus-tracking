@@ -4,11 +4,15 @@ import com.dtc.bus_tracker.dto.BusLocationEvent;
 import com.dtc.bus_tracker.live.TransitIndex;
 import com.dtc.bus_tracker.repository.RouteRepository;
 
+import jakarta.annotation.PreDestroy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /**
@@ -37,6 +41,12 @@ public class DtcIngestionService {
     private final TransitIndex transitIndex;
     private Set<String> routeCodes = Set.of();
     private long mappingsLoadedAt;
+    private final ExecutorService publishExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "dtc-publish");
+        t.setDaemon(true);
+        return t;
+    });
+    private final AtomicBoolean publishing = new AtomicBoolean();
 
     public DtcIngestionService(DtcApiClient dtcApiClient, BusLocationPublisher publisher,
                                RouteRepository routeRepository, TransitIndex transitIndex) {
@@ -64,12 +74,41 @@ public class DtcIngestionService {
                     // a vehicle on the wrong route (matches the check in LiveTransitService).
                     .filter(e -> isTripRouteConsistent(e))
                     .toList();
-            events.forEach(publisher::publish);
-            System.out.println("Published " + events.size() + " bus location events (North/North West Delhi routes)");
+            publishInBackground(events);
         } catch (Exception e) {
             System.err.println("DTC ingestion failed: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Publishing does a Redis write plus several database round trips per bus, which on a
+     * hosted deployment (remote Redis/Postgres) can take far longer than the poll interval.
+     * Running it inline delayed the next fetch, so the realtime snapshot behind the live map
+     * went stale. Publish on a separate thread instead and drop a batch while the previous one
+     * is still running - the next poll carries newer positions anyway.
+     */
+    private void publishInBackground(List<BusLocationEvent> events) {
+        if (!publishing.compareAndSet(false, true)) {
+            System.out.println("Previous publish still running; skipped " + events.size() + " bus location events");
+            return;
+        }
+        publishExecutor.execute(() -> {
+            try {
+                events.forEach(publisher::publish);
+                System.out.println("Published " + events.size() + " bus location events (North/North West Delhi routes)");
+            } catch (Exception e) {
+                System.err.println("DTC publish failed: " + e.getMessage());
+                e.printStackTrace();
+            } finally {
+                publishing.set(false);
+            }
+        });
+    }
+
+    @PreDestroy
+    void shutdown() {
+        publishExecutor.shutdownNow();
     }
 
     /**
