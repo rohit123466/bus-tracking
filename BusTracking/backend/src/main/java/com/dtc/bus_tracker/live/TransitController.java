@@ -18,6 +18,7 @@ public class TransitController {
   // Field-injected so the existing five-argument constructor (used by tests) is unchanged.
   @Autowired private RegionService regions;
   @Autowired private RouteLearner learner;
+  @Autowired private JourneyService journeys;
 
   public TransitController(
       TransitIndex index,
@@ -136,6 +137,27 @@ public class TransitController {
             .filter(Objects::nonNull)
             .toList();
     return new RouteMap(stops, shapes);
+  }
+
+  /** Ordered GTFS stop pattern per route_id (direction) of a public route number. */
+  @GetMapping("/routes/patterns")
+  public List<JourneyService.Pattern> patterns(@RequestParam String routeNumber) {
+    query(routeNumber);
+    return journeys.patterns(routeNumber);
+  }
+
+  /** Direct and one-transfer journeys between two points over the GTFS stop patterns. */
+  @GetMapping("/journey/plan")
+  public JourneyService.Plan journey(
+      @RequestParam double fromLat,
+      @RequestParam double fromLng,
+      @RequestParam double toLat,
+      @RequestParam double toLng,
+      @RequestParam(defaultValue = "FASTEST") String preference) {
+    coordinates(fromLat, fromLng);
+    coordinates(toLat, toLng);
+    query(preference);
+    return journeys.plan(fromLat, fromLng, toLat, toLng, preference);
   }
 
   @GetMapping("/stops/search")

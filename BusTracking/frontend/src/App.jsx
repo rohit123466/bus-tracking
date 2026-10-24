@@ -1,14 +1,16 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import NavBar from './components/NavBar';
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom';
+import AppShell from './components/AppShell';
+import ArrivalWatcher from './components/ArrivalWatcher';
 import ErrorBoundary from './components/ErrorBoundary';
 import NotFoundPage from './pages/NotFoundPage';
-const HomePage = lazy(() => import('./pages/HomePage'));
+const ExplorePage = lazy(() => import('./pages/ExplorePage'));
+const NearbyPage = lazy(() => import('./pages/NearbyPage'));
+const JourneyPage = lazy(() => import('./pages/JourneyPage'));
+const SavedPage = lazy(() => import('./pages/SavedPage'));
 const BusSearchPage = lazy(() => import('./pages/BusSearchPage'));
 const RouteDetailPage = lazy(() => import('./pages/RouteDetailPage'));
-const StopsNearbyPage = lazy(() => import('./pages/StopsNearbyPage'));
 const PassingNearMePage = lazy(() => import('./pages/PassingNearMePage'));
-const JourneyPlannerPage = lazy(() => import('./pages/JourneyPlannerPage'));
 const ReplayPage = lazy(() => import('./pages/ReplayPage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
 const AccessibilityPage = lazy(() => import('./pages/AccessibilityPage'));
@@ -16,30 +18,47 @@ const SeatAvailabilityPage = lazy(() => import('./pages/SeatAvailabilityPage'));
 const ConductorPage = lazy(() => import('./pages/ConductorPage'));
 import './App.css';
 
-function App() {
+// Pages that lay out their own full-height panes (map + side panel) instead of scrolling as a whole.
+const FILL_PAGES = new Set(['/', '/journey']);
+
+// The classic tool pages predate the theme tokens and assume light colours.
+const Classic = ({ children }) => (
+  <div className="legacy-page" data-theme="light">{children}</div>
+);
+
+function Shell() {
+  const { pathname } = useLocation();
   return (
-    <BrowserRouter>
-      <div className="app-shell">
-        <NavBar />
-        <div className="page-outlet">
-          <ErrorBoundary><Suspense fallback={<p role="status">Loading…</p>}><Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/accessibility" element={<AccessibilityPage />} />
-            <Route path="/search" element={<BusSearchPage />} />
-            <Route path="/route" element={<RouteDetailPage />} />
-            <Route path="/stops" element={<StopsNearbyPage />} />
-            <Route path="/passing" element={<PassingNearMePage />} />
-            <Route path="/journey" element={<JourneyPlannerPage />} />
-            <Route path="/replay" element={<ReplayPage />} />
-            <Route path="/seats" element={<SeatAvailabilityPage />} />
-            <Route path="/conductor" element={<ConductorPage />} />
-            <Route path="/admin" element={<AdminDashboardPage />} />
+    <AppShell fill={FILL_PAGES.has(pathname)}>
+      <ErrorBoundary>
+        <Suspense fallback={<p role="status" style={{ padding: 16 }}>Loading…</p>}>
+          <Routes>
+            <Route path="/" element={<ExplorePage />} />
+            <Route path="/nearby" element={<NearbyPage />} />
+            <Route path="/stops" element={<Navigate to="/nearby" replace />} />
+            <Route path="/journey" element={<JourneyPage />} />
+            <Route path="/saved" element={<SavedPage />} />
+            <Route path="/accessibility" element={<Classic><AccessibilityPage /></Classic>} />
+            <Route path="/search" element={<Classic><BusSearchPage /></Classic>} />
+            <Route path="/route" element={<Classic><RouteDetailPage /></Classic>} />
+            <Route path="/passing" element={<Classic><PassingNearMePage /></Classic>} />
+            <Route path="/replay" element={<Classic><ReplayPage /></Classic>} />
+            <Route path="/seats" element={<Classic><SeatAvailabilityPage /></Classic>} />
+            <Route path="/conductor" element={<Classic><ConductorPage /></Classic>} />
+            <Route path="/admin" element={<Classic><AdminDashboardPage /></Classic>} />
             <Route path="*" element={<NotFoundPage />} />
-          </Routes></Suspense></ErrorBoundary>
-        </div>
-      </div>
-    </BrowserRouter>
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
+    </AppShell>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Shell />
+      <ArrivalWatcher />
+    </BrowserRouter>
+  );
+}

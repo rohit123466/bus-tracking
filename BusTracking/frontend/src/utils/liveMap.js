@@ -139,10 +139,37 @@ export function learningText(status) {
   return `Learned real paths for ${status.learnedOfRunning} of ${status.routesRunningNow} routes running now`;
 }
 
-/** "850 m" / "12.4 km" for a distance in metres. */
-export function distanceText(m) {
-  if (m == null || !Number.isFinite(m)) return null;
-  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+export { distanceText } from './format.js';
+
+/** How an ETA was produced, shown as text next to it so it never relies on colour alone. */
+export const ETA_SOURCE_TEXT = {
+  TRIP_UPDATE: 'Live prediction',
+  GEOMETRY_ESTIMATE: 'Estimate from live speed',
+  STOP_CHAIN_ESTIMATE: 'Estimate from live speed',
+  TYPICAL_SPEED_ESTIMATE: 'Rough estimate at typical bus speed',
+  LEARNED_ROUTE_ESTIMATE: 'Estimate from recent trips on this route',
+  UNAVAILABLE: 'No reliable estimate',
+};
+
+/** Soonest first; entries without a numeric ETA last, then by route number. */
+export function sortByEta(list) {
+  return [...(list ?? [])].sort((a, b) =>
+    (a.etaMinutes ?? Infinity) - (b.etaMinutes ?? Infinity)
+    || String(a.routeNumber ?? '').localeCompare(String(b.routeNumber ?? ''), undefined, { numeric: true }));
+}
+
+/** A poll older than this means the map is no longer being refreshed. */
+export const FEED_STALE_AFTER_MS = 45000;
+
+/**
+ * State of the live layer as a whole: 'loading' before the first answer, 'live' while polls keep
+ * succeeding, 'stale' when the last success is too old (positions shown are aging out), 'down'
+ * when the backend says its vehicle feed is unavailable, 'error' when nothing was ever loaded.
+ */
+export function feedState({ updatedAt, error, data }, nowMs = Date.now()) {
+  if (data?.feedAvailable === false) return 'down';
+  if (!updatedAt) return error ? 'error' : 'loading';
+  return nowMs - updatedAt > FEED_STALE_AFTER_MS ? 'stale' : 'live';
 }
 
 /**

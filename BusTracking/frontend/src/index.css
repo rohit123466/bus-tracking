@@ -1,29 +1,94 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 14px/145% var(--sans);
+/* ── Design tokens ─────────────────────────────────────────────────────────
+   Defined on :root and on [data-theme] so a subtree can force a theme (the legacy pages, whose
+   own styles assume light colours, are wrapped in data-theme="light"). Text colours meet WCAG AA
+   (4.5:1) on their surfaces in both themes. */
+:root,
+[data-theme='light'] {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #f1f4f7;
+  --surface-3: #e5e9ee;
+  --text: #111827;
+  --text-2: #3f4a5a;
+  --text-3: #5b6676;
+  --border: #dde2e8;
+  --border-strong: #b9c2cd;
+  --brand: #0f6e66;
+  --brand-ink: #ffffff;
+  --brand-soft: #e3f3f0;
+  --link: #1d4ed8;
+  --focus: #2563eb;
+  --live: #157a3c;
+  --live-soft: #dcf5e4;
+  --delayed: #9a5a00;
+  --delayed-soft: #fdf1d6;
+  --muted-soft: #eceff3;
+  --danger: #b42318;
+  --danger-soft: #fde7e4;
+  --info: #1d4ed8;
+  --info-soft: #e1eafd;
+  --route-0: #0f6e66;
+  --route-1: #7c3aed;
+  --walk: #3f4a5a;
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.08), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-2: 0 8px 24px rgba(16, 24, 40, 0.14);
+  --scrim: rgba(15, 23, 42, 0.35);
   color-scheme: light;
-  color: var(--text);
-  background: var(--bg);
+
+  /* Aliases used by the legacy page styles in App.css. */
+  --text-h: var(--text);
+  --accent: var(--brand);
+  --accent-bg: var(--brand-soft);
+  --accent-border: var(--brand);
+  --code-bg: var(--surface-2);
+  --shadow: var(--shadow-2);
+}
+
+[data-theme='dark'] {
+  --bg: #0b1117;
+  --surface: #121a23;
+  --surface-2: #18222d;
+  --surface-3: #223040;
+  --text: #e8eef4;
+  --text-2: #b6c3cf;
+  --text-3: #93a2b1;
+  --border: #263443;
+  --border-strong: #3a4b5e;
+  --brand: #34c3b2;
+  --brand-ink: #04211d;
+  --brand-soft: #10302c;
+  --link: #8ab8ff;
+  --focus: #8ab8ff;
+  --live: #57d68a;
+  --live-soft: #123222;
+  --delayed: #f5b942;
+  --delayed-soft: #3a2b0b;
+  --muted-soft: #1f2a36;
+  --danger: #ff8a7a;
+  --danger-soft: #3d1714;
+  --info: #8ab8ff;
+  --info-soft: #14263f;
+  --route-0: #34c3b2;
+  --route-1: #b794ff;
+  --walk: #b6c3cf;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 10px 28px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+:root {
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+  --mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  --radius-s: 8px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+  --tap: 44px;
+  font: 100%/1.5 var(--sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
-
-
 
 html,
 body,
@@ -35,11 +100,53 @@ body,
   overflow: hidden;
 }
 
-* {
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9375rem;
+}
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-/* ── Selected bus marker highlight ──────────────── */
+h1, h2, h3, h4 {
+  color: var(--text);
+  line-height: 1.25;
+  margin: 0;
+}
+
+a {
+  color: var(--link);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Selected bus marker highlight (legacy map pages) */
 .bus-marker-selected .bus-chip-selected {
   background: #ff6b00 !important;
   border: 2px solid #fff;

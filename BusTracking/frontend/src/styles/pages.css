@@ -1,0 +1,313 @@
+/* ── Explore: map with collapsible side panel (desktop) / bottom sheet (phone) ── */
+.explore {
+  position: relative;
+  display: grid;
+  grid-template-columns: 400px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+.explore.panel-closed { grid-template-columns: 0 minmax(0, 1fr); }
+.explore.panel-closed .side { visibility: hidden; }
+
+.side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: 1100;
+}
+.side-head {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.side-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  overscroll-behavior: contain;
+}
+
+.map-wrap {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.status-pill {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 72px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: calc(100% - 84px);
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-1);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.status-live .dot { color: var(--live); }
+.status-stale .dot,
+.status-loading .dot { color: var(--delayed); }
+.status-down .dot,
+.status-error .dot { color: var(--danger); }
+.status-stale,
+.status-down,
+.status-error { border-radius: var(--radius-m); }
+
+.map-ctrls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+  display: grid;
+  gap: 8px;
+}
+.map-btn {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+}
+.map-btn:hover { background: var(--surface-2); }
+.map-btn:disabled { opacity: 0.5; }
+
+.map-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 24px;
+  z-index: 900;
+  display: flex;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+.map-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.lg { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.lg-live { background: var(--live); }
+.lg-delayed { background: var(--delayed); }
+
+.swatch { display: inline-block; width: 22px; height: 4px; border-radius: 2px; flex: none; }
+.swatch-0 { background: var(--route-0); }
+.swatch-1 { background: var(--route-1); }
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 10px 16px;
+  margin: 0;
+}
+.facts dt { color: var(--text-3); font-size: 0.875rem; }
+.facts dd { margin: 0; }
+
+.stop-badge-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand);
+  flex: none;
+}
+
+.arr-list { display: grid; gap: 2px; }
+.arr-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; min-height: 56px; }
+div.arr-row { border-bottom: 1px solid var(--border); }
+.arr-reason { display: block; margin-top: 2px; }
+.idle-routes { margin-top: 10px; font-size: 0.875rem; color: var(--text-2); }
+.idle-routes summary { cursor: pointer; padding: 6px 0; }
+
+.walk-box {
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--surface-2);
+}
+.notify-row { padding: 6px 10px; border-radius: var(--radius-s); background: var(--surface-2); }
+.notify-form {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+}
+.notify-form .field { min-width: 180px; flex: 1; }
+.mb { margin-bottom: 8px; }
+
+.data-notes { margin-top: 24px; font-size: 0.8125rem; color: var(--text-3); }
+.data-notes summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
+.data-notes ul { padding-left: 18px; }
+
+.sheet-handle {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  flex: none;
+}
+.sheet-handle span { width: 40px; height: 5px; border-radius: 3px; background: var(--border-strong); }
+
+@media (max-width: 899px) {
+  .explore { display: block; }
+  .explore.panel-closed .side { visibility: visible; }
+  .map-wrap { position: absolute; inset: 0; }
+  .side {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 46%;
+    border-right: 0;
+    border-top-left-radius: var(--radius-l);
+    border-top-right-radius: var(--radius-l);
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
+    transition: height 0.2s ease;
+  }
+  .explore.panel-closed .side { height: 128px; }
+  .explore.panel-closed .side-body { display: none; }
+  .side-head { padding-top: 0; }
+  .status-pill { right: 64px; }
+  .map-legend { display: none; }
+  .map-wrap .leaflet-bottom { bottom: 46%; transition: bottom 0.2s ease; }
+  .explore.panel-closed .map-wrap .leaflet-bottom { bottom: 128px; }
+}
+
+/* ── Standard scrolling pages (Nearby, Saved) ─────────────────────────────── */
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+  display: grid;
+  gap: 16px;
+}
+.page-head { display: grid; gap: 4px; }
+.page-head h1 { font-size: 1.5rem; }
+.page-head p { margin: 0; color: var(--text-2); }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+
+.stand { overflow: hidden; }
+.stand-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px 8px 16px;
+}
+.stand-head h2 { font-size: 1.05rem; }
+.stand-body { padding: 0 8px 12px; }
+.stand-body > .idle-routes,
+.stand-body > .stand-actions,
+.stand-body > .arr-empty { padding: 0 8px; }
+.stand-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+.soon-list { display: grid; gap: 4px; }
+
+/* ── Journey planner ──────────────────────────────────────────────────────── */
+.journey {
+  display: grid;
+  grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+.journey-side {
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 16px 32px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+.journey-map { position: relative; min-height: 0; }
+.jr-form { display: grid; gap: 12px; }
+.jr-ends { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.jr-ends .stack { gap: 12px; }
+.jr-card { overflow: hidden; }
+.jr-summary {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.jr-summary:hover { background: var(--surface-2); }
+.jr-card[data-selected='true'] { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
+.jr-total { font-size: 1.25rem; font-weight: 800; }
+.jr-legs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+.timeline { list-style: none; margin: 0; padding: 4px 16px 16px; }
+.tl-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  padding-bottom: 14px;
+}
+.tl-step::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 30px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border-strong);
+}
+.tl-step:last-child::before { display: none; }
+.tl-step-bus::before { background: var(--brand); width: 4px; left: 14px; }
+.tl-step-walk::before { background: repeating-linear-gradient(var(--walk) 0 4px, transparent 4px 8px); }
+.tl-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-2);
+  z-index: 1;
+}
+.tl-step-bus .tl-icon { background: var(--brand); color: var(--brand-ink); }
+.tl-step p { margin: 2px 0 0; font-size: 0.875rem; color: var(--text-2); }
+.tl-stops { margin: 6px 0 0; padding-left: 18px; font-size: 0.8125rem; color: var(--text-3); }
+
+@media (max-width: 899px) {
+  .journey { display: block; height: 100%; overflow: auto; }
+  .journey-side { border-right: 0; overflow: visible; }
+  .journey-map { height: 52vh; min-height: 300px; border-top: 1px solid var(--border); }
+}
+
+/* ── Classic pages wrapper ────────────────────────────────────────────────── */
+.legacy-page {
+  height: 100%;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--text);
+}

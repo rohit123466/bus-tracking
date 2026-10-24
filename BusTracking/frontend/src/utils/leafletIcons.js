@@ -15,7 +15,7 @@ L.Icon.Default.mergeOptions({
 // Escapes text dropped into a divIcon's raw HTML string (stop names/route
 // codes come from GTFS data, but this is cheap insurance against markup
 // sneaking in through an untrusted feed).
-function escapeHtml(text) {
+export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 

@@ -29,7 +29,10 @@ USER app
 ENV SPRING_PROFILES_ACTIVE=prod
 # Size the heap from the container limit (Render instances are small), and exit on
 # OutOfMemoryError so the platform restarts a clean process instead of a broken one.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"
+# SerialGC keeps the whole max heap committed, so the heap share must leave room for
+# metaspace, code cache and native memory: at 512 MB, 40% (~205 MB) fits the ~95 MB
+# GTFS index plus the app, while 55% got the instance OOM-killed by the platform.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=40 -XX:MaxMetaspaceSize=150m -XX:ReservedCodeCacheSize=40m -XX:TieredStopAtLevel=1 -Xss512k -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"
 
 # Render injects PORT; application-prod.properties binds server.port to it.
 EXPOSE 8080

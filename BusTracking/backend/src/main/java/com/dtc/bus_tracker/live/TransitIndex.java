@@ -25,6 +25,56 @@ public class TransitIndex {
   public record Trip(
       String id, String routeId, String direction, String shapeId, List<Visit> visits) {}
 
+  /**
+   * A trip's visits packed as {stop, sequence, arrival, departure} ints, materialised on access.
+   * stop_times has ~3.7M rows: one Visit object per row held ~200 MB of heap and got the 512 MB
+   * hosted instance OOM-killed.
+   */
+  private static final class PackedVisits extends AbstractList<Visit> implements RandomAccess {
+    private final String[] stopIds;
+    private final int[] rows;
+
+    PackedVisits(String[] stopIds, int[] rows) {
+      this.stopIds = stopIds;
+      this.rows = rows;
+    }
+
+    @Override
+    public Visit get(int i) {
+      int o = Objects.checkIndex(i, size()) * 4;
+      return new Visit(stopIds[rows[o]], rows[o + 1], rows[o + 2], rows[o + 3]);
+    }
+
+    @Override
+    public int size() {
+      return rows.length / 4;
+    }
+  }
+
+  /** Growable int buffer collecting one trip's packed stop_times rows while loading. */
+  private static final class RowBuffer {
+    private int[] rows = new int[64];
+    private int length;
+
+    void add(int stop, int sequence, int arrival, int departure) {
+      if (length + 4 > rows.length) rows = Arrays.copyOf(rows, rows.length * 2);
+      rows[length++] = stop;
+      rows[length++] = sequence;
+      rows[length++] = arrival;
+      rows[length++] = departure;
+    }
+
+    /** Rows in GTFS stop sequence (stable for equal sequences), trimmed to size. */
+    int[] sortedBySequence() {
+      Integer[] order = new Integer[length / 4];
+      for (int i = 0; i < order.length; i++) order[i] = i;
+      Arrays.sort(order, Comparator.comparingInt(i -> rows[i * 4 + 1]));
+      int[] sorted = new int[length];
+      for (int i = 0; i < order.length; i++) System.arraycopy(rows, order[i] * 4, sorted, i * 4, 4);
+      return sorted;
+    }
+  }
+
   public final Map<String, Stop> stops = new HashMap<>();
   public final Map<String, Route> routes = new HashMap<>();
   public final Map<String, Trip> trips = new HashMap<>();
@@ -106,24 +156,46 @@ public class TransitIndex {
                     r.get("route_id"),
                     r.getOrDefault("direction_id", ""),
                     r.getOrDefault("shape_id", ""),
-                    new ArrayList<>())));
+                    List.of())));
+    Map<String, Integer> stopIndex = new HashMap<>();
+    List<String> stopIds = new ArrayList<>();
+    Map<String, RowBuffer> pending = new HashMap<>();
     read(
         "stop_times.txt",
         r -> {
           Trip t = trips.get(r.get("trip_id"));
           Stop s = stops.get(r.get("stop_id"));
           if (t == null || s == null) return;
-          t.visits()
+          int stop =
+              stopIndex.computeIfAbsent(
+                  s.id(),
+                  k -> {
+                    stopIds.add(k);
+                    return stopIds.size() - 1;
+                  });
+          pending
+              .computeIfAbsent(t.id(), k -> new RowBuffer())
               .add(
-                  new Visit(
-                      s.id(),
-                      Integer.parseInt(r.get("stop_sequence")),
-                      seconds(r.get("arrival_time")),
-                      seconds(r.get("departure_time"))));
+                  stop,
+                  Integer.parseInt(r.get("stop_sequence")),
+                  seconds(r.get("arrival_time")),
+                  seconds(r.get("departure_time")));
           routesAtStop.computeIfAbsent(s.id(), k -> new HashSet<>()).add(t.routeId());
         });
     // Preserve GTFS stop sequence, including times beyond midnight.
-    trips.values().forEach(t -> t.visits().sort(Comparator.comparingInt(Visit::sequence)));
+    String[] stopTable = stopIds.toArray(String[]::new);
+    trips.replaceAll(
+        (id, t) -> {
+          RowBuffer rows = pending.remove(id);
+          return rows == null
+              ? t
+              : new Trip(
+                  t.id(),
+                  t.routeId(),
+                  t.direction(),
+                  t.shapeId(),
+                  new PackedVisits(stopTable, rows.sortedBySequence()));
+        });
     read(
         "shapes.txt",
         r ->
