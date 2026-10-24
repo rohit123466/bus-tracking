@@ -3,14 +3,14 @@ import { Link } from 'react-router-dom';
 import Icon from '../ui/Icon';
 import Combobox from '../ui/Combobox';
 import { Notice, SkeletonList, ErrorState, EmptyState } from '../ui/States';
-import { Eta, FavRouteButton, FreshnessBadge } from '../ui/Badges';
+import { Eta, FavRouteButton, FreshnessBadge, RouteCheckNote, RouteChip } from '../ui/Badges';
 import LocationPrompt from '../transit/LocationPrompt';
 import ServiceAlertsPanel from '../ServiceAlertsPanel';
 import useSearch from '../../hooks/useSearch';
 import { useStore } from '../../hooks/useStores';
 import { searchTransitRoutes } from '../../api/client';
 import { favouriteRoutes, favouriteStops } from '../../store/favourites';
-import { REGION_OPTIONS, sortByEta } from '../../utils/liveMap';
+import { REGION_OPTIONS, routeUnconfirmed, sortByEta } from '../../utils/liveMap';
 import { ageText, distanceText, plural } from '../../utils/format';
 
 export function RouteSearch({ onSelect }) {
@@ -115,7 +115,7 @@ function NearbyStands({ near, stands, onSelectStop }) {
                 <span className="row wrap" style={{ gap: 10, marginTop: 6 }}>
                   {next.length ? next.map(u => (
                     <span key={u.vehicleId} className="row" style={{ gap: 6 }}>
-                      <span className="route-chip">{u.routeNumber}</span>
+                      <RouteChip upcoming={u} />
                       <Eta upcoming={u} />
                     </span>
                   )) : <span className="small muted">No bus tracked towards this stop now</span>}
@@ -131,9 +131,12 @@ function NearbyStands({ near, stands, onSelectStop }) {
 }
 
 /** A route is selected: its live buses, directions and data caveats. */
-export function RoutePanel({ route, buses, busesQuery, geometryQuery, now, onSelectBus, onClose, onFit }) {
+export function RoutePanel({ route, buses, hiddenUnconfirmed = 0, busesQuery, geometryQuery, now, onSelectBus, onClose, onFit }) {
   const geometry = geometryQuery.data;
   const data = busesQuery.data;
+  // Buses whose position fits the route first; the stable sort keeps the server's order otherwise.
+  const listed = [...buses].sort((a, b) => routeUnconfirmed(a) - routeUnconfirmed(b));
+  const unconfirmed = buses.filter(routeUnconfirmed).length;
   return (
     <div className="stack" style={{ gap: 16 }}>
       <div className="row">
@@ -158,30 +161,49 @@ export function RoutePanel({ route, buses, busesQuery, geometryQuery, now, onSel
           : busesQuery.error && !data ? <ErrorState error={busesQuery.error} onRetry={busesQuery.refresh} what="live buses" />
           : buses.length === 0 ? (
             <p className="small muted" style={{ margin: 0 }}>
-              No bus on route {route} is reporting a live position inside the selected area right now.
+              {hiddenUnconfirmed > 0
+                ? `No bus on route ${route} whose position fits the route is inside the selected area right now.`
+                : `No bus on route ${route} is reporting a live position inside the selected area right now.`}
               {data?.excludedOutsideArea > 0 && ` ${plural(data.excludedOutsideArea, 'bus', 'buses')} on this route ${data.excludedOutsideArea === 1 ? 'is' : 'are'} elsewhere in Delhi.`}
             </p>
           ) : (
-            <ul className="list-reset">
-              {buses.map(b => (
-                <li key={b.vehicleId}>
-                  <button type="button" className="row-btn" onClick={() => onSelectBus(b)}>
-                    <Icon name="bus" />
-                    <span className="grow">
-                      <span className="truncate" style={{ display: 'block', fontWeight: 600 }}>
-                        {b.nextStopName ? `Next: ${b.nextStopName}` : 'Next stop not known'}
+            <>
+              {unconfirmed > 0 && (
+                <Notice tone="warn" className="mb">
+                  {plural(unconfirmed, 'bus', 'buses')} reported on route {route} {unconfirmed === 1 ? 'is' : 'are'} more than
+                  500 m from every stop of this route in the timetable, so {unconfirmed === 1 ? 'it' : 'they'} may not be running it
+                  (depot, diversion, or an outdated route mapping in the live feed). They are marked “Route unconfirmed” and drawn hollow on the map.
+                </Notice>
+              )}
+              <ul className="list-reset">
+                {listed.map(b => (
+                  <li key={b.vehicleId}>
+                    <button type="button" className="row-btn" onClick={() => onSelectBus(b)}>
+                      <Icon name="bus" />
+                      <span className="grow">
+                        <span className="truncate" style={{ display: 'block', fontWeight: 600 }}>
+                          {b.nextStopName ? `Next: ${b.nextStopName}` : 'Next stop not known'}
+                        </span>
+                        <span className="meta">
+                          <span>{b.vehicleId}</span>
+                          <span>{b.direction ? `Direction ${b.direction}` : 'Direction not reported'}</span>
+                          <span>GPS {ageText(b.lastUpdatedEpochSeconds, now)}</span>
+                        </span>
+                        <RouteCheckNote item={b} />
                       </span>
-                      <span className="meta">
-                        <span>{b.direction ? `Direction ${b.direction}` : 'Direction not reported'}</span>
-                        <span>GPS {ageText(b.lastUpdatedEpochSeconds, now)}</span>
-                      </span>
-                    </span>
-                    <FreshnessBadge epochSeconds={b.lastUpdatedEpochSeconds} now={now} />
-                  </button>
-                </li>
-              ))}
-            </ul>
+                      <FreshnessBadge epochSeconds={b.lastUpdatedEpochSeconds} now={now} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
+        {hiddenUnconfirmed > 0 && (
+          <p className="small muted">
+            {plural(hiddenUnconfirmed, 'bus', 'buses')} with an unconfirmed route {hiddenUnconfirmed === 1 ? 'is' : 'are'} hidden.
+            Untick “Hide buses whose route number is unconfirmed” above to show {hiddenUnconfirmed === 1 ? 'it' : 'them'}.
+          </p>
+        )}
         {data?.excludedOutsideArea > 0 && buses.length > 0 && (
           <p className="small muted">{plural(data.excludedOutsideArea, 'more bus', 'more buses')} on this route {data.excludedOutsideArea === 1 ? 'is' : 'are'} outside the selected area and not shown.</p>
         )}

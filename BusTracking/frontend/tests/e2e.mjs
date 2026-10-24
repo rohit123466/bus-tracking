@@ -18,15 +18,22 @@ const bus = (id, routeCode, ageSeconds, extra = {}) => ({
   nextStopSource: 'INFERRED_FROM_GPS_ON_ROUTE', nextStopDistanceMeters: 400, nextStopEtaMinutes: 1.5,
   nextStopEtaBasis: 'STOP_CHAIN_ESTIMATE', ...extra,
 });
-const upcoming = (routeNumber, vehicleId, etaMinutes, availability) => ({
+const upcoming = (routeNumber, vehicleId, etaMinutes, availability, extra = {}) => ({
   routeNumber, vehicleId, etaMinutes, availability, label: '', reason: etaMinutes == null ? 'Route geometry unavailable.' : null,
   remainingStops: 3, lastGpsUpdate: now() - 10, busLatitude: 28.70, busLongitude: 77.17, speedKmh: 18, distanceMeters: 900,
+  routeCheck: 'ON_ROUTE', ...extra,
 });
 
 function fixtures({ patterns404 = false, journey404 = false } = {}) {
   return {
-    '/api/transit/buses/regional': () => ({
-      buses: [bus('LIVE1', '534', 5), bus('DELAYED1', '534', 70), bus('STALE1', '534', 400)],
+    // Route 106 deliberately includes look-alike route numbers and a duplicate record, as a
+    // contaminated answer would.
+    '/api/transit/buses/regional': url => ({
+      buses: url.searchParams.get('routeNumber') === '106'
+        ? [bus('R106', '106', 5, { routeCheck: 'ON_ROUTE' }), bus('R106A', '106A', 5), bus('R1060', '1060', 5), bus('R160', '160', 5),
+          bus('R106', '106', 9, { busLatitude: 28.71 })]
+        : [bus('LIVE1', '534', 5, { routeCheck: 'ON_ROUTE' }), bus('DELAYED1', '534', 70, { routeCheck: 'TRIP_MATCH' }),
+          bus('STALE1', '534', 400), bus('OFF1', '534', 8, { routeCheck: 'OFF_ROUTE', nextStopName: null, nextStopEtaMinutes: null })],
       warnings: [], fetchedAt: now(), feedAvailable: true, region: 'ANY', eligibleRouteCount: 2, excludedByRegion: 0, excludedOutsideArea: 0,
     }),
     '/api/transit/routes/search': () => ['534', '534A'],
@@ -39,7 +46,8 @@ function fixtures({ patterns404 = false, journey404 = false } = {}) {
     '/api/transit/stops/search': () => [STOP],
     '/api/transit/stops/nearby-regional': () => ({
       stops: [{ ...STOP, distanceMeters: 120, walkMinutes: 1.4, walkBasis: 'STRAIGHT_LINE_ESTIMATE', routeNumbers: ['534', '990'], liveCount: 3,
-        upcoming: [upcoming('534', 'LIVE1', 6.2, 'LEARNED_ROUTE_ESTIMATE'), upcoming('990', 'X9', null, 'UNAVAILABLE'), upcoming('534', 'TU1', 2.1, 'TRIP_UPDATE')] }],
+        upcoming: [upcoming('534', 'LIVE1', 6.2, 'LEARNED_ROUTE_ESTIMATE'), upcoming('990', 'X9', null, 'UNAVAILABLE'), upcoming('534', 'TU1', 2.1, 'TRIP_UPDATE'),
+          upcoming('534', 'OLD1', 30, 'LEARNED_ROUTE_ESTIMATE', { lastGpsUpdate: now() - 200, routeCheck: 'OFF_ROUTE' })] }],
       radiusMeters: 500, feedAvailable: true, region: 'ANY', warnings: [],
     }),
     '/api/transit/journey/plan': () => journey404 ? 404 : {
@@ -57,7 +65,7 @@ function fixtures({ patterns404 = false, journey404 = false } = {}) {
 async function newPage(browser, opts = {}) {
   const ctx = await browser.newContext({
     viewport: opts.viewport ?? { width: 1280, height: 820 },
-    geolocation: { latitude: 28.708, longitude: 77.181, accuracy: 15 }, permissions: ['geolocation'],
+    geolocation: { latitude: 28.708, longitude: 77.181, accuracy: 15 }, permissions: opts.noLocation ? [] : ['geolocation'],
   });
   const page = await ctx.newPage();
   const errors = [];
@@ -65,8 +73,9 @@ async function newPage(browser, opts = {}) {
   const table = fixtures(opts);
   await page.route(u => new URL(u).pathname.startsWith('/api/'), async route => {
     if (opts.down) return route.abort('connectionrefused');
-    const handler = table[new URL(route.request().url()).pathname];
-    const body = handler ? handler() : 404;
+    const url = new URL(route.request().url());
+    const handler = table[url.pathname];
+    const body = handler ? handler(url) : 404;
     if (body === 404) return route.fulfill({ status: 404, json: { message: 'Not found' }, headers: { 'access-control-allow-origin': '*' } });
     return route.fulfill({ json: body, headers: { 'access-control-allow-origin': '*' } });
   });
@@ -83,7 +92,7 @@ try {
   const { page, errors } = await newPage(browser);
   await check('live map hides positions older than 2 minutes and labels delayed GPS', async () => {
     await page.goto(`${BASE}/?route=534`);
-    await page.getByText(/^Live feed · 2 buses on route 534/).waitFor();
+    await page.getByText(/^Live feed · 3 buses on route 534 \(1 with an unconfirmed route\)/).waitFor();
     assert.equal(await page.getByText('Delayed GPS').count(), 1);
     assert.equal(await page.getByText('Live GPS', { exact: true }).count() >= 1, true);
   });
@@ -105,7 +114,10 @@ try {
     const text = (await rows.allInnerTexts()).map(t => t.replace(/\s+/g, ' '));
     assert.match(text[0], /534.*2.*min.*Live prediction/);
     assert.match(text[1], /534.*≈.*6.*Estimate from recent trips/);
-    assert.match(text[2], /990.*No estimate/);
+    // Its GPS fix is 200 s old: the 30 min estimate is withdrawn, and its route number is flagged.
+    assert.match(text[2], /534.*Route unconfirmed.*Out of date/);
+    assert.doesNotMatch(text[2], /\b30\b/);
+    assert.match(text[3], /990.*No estimate/);
   });
   await check('arrival alert fires once, in-app, for a bus within the threshold', async () => {
     await page.getByRole('button', { name: 'Alert me when a bus is near' }).click();
@@ -127,9 +139,84 @@ try {
     const t = await page.locator('.timeline').innerText();
     assert.match(t, /Board at Azadpur Terminal/);
     assert.match(t, /timetable ride time/);
-    assert.match(await page.locator('.jr-summary').innerText(), /waiting for 1 bus/);
+    const summary = await page.locator('.jr-summary').innerText();
+    assert.match(summary, /waiting for 1 bus/);
+    assert.match(summary, /Timetable ride times/);
+    assert.match(summary, /Walk ≈ 250 m \(straight line\)/);
+  });
+  await check('route with an unconfirmed bus: flagged in list and detail, can be hidden everywhere', async () => {
+    await page.goto(`${BASE}/?route=534`);
+    await page.getByText(/1 bus reported on route 534 is more than 500 m/).waitFor();
+    const items = await page.locator('section[aria-labelledby="rt-buses"] li').allInnerTexts();
+    assert.match(items.at(-1), /OFF1[\s\S]*Route unconfirmed/, 'unconfirmed bus is listed last');
+    await page.getByRole('button', { name: /OFF1/ }).click();
+    await page.getByText('Route number unconfirmed.').waitFor();
+    await page.goBack();
+    await page.getByRole('checkbox', { name: /Hide buses whose route number is unconfirmed/ }).check();
+    await page.getByText(/^Live feed · 2 buses on route 534 \(1 with an unconfirmed route hidden\)/).waitFor();
+    assert.equal(await page.getByRole('button', { name: /OFF1/ }).count(), 0);
+    await page.getByText(/1 bus with an unconfirmed route is hidden/).waitFor();
+    await page.getByRole('checkbox', { name: /Hide buses whose route number is unconfirmed/ }).uncheck();
+  });
+  await check('route 106: look-alike routes and a duplicate vehicle never reach the map or list', async () => {
+    await page.goto(`${BASE}/?route=106`);
+    await page.getByText(/^Live feed · 1 bus on route 106 ·/).waitFor();
+    const list = await page.locator('.side-body').innerText();
+    for (const id of ['R106A', 'R1060', 'R160']) assert.ok(!list.includes(id), id);
+    assert.equal(await page.getByRole('button', { name: /R106/ }).count(), 1);
+  });
+  await check('find buses near me: blue location marker, nearest stand with arrivals, reset view', async () => {
+    await page.goto(BASE);
+    await page.getByRole('button', { name: 'Find buses near me' }).click();
+    await page.locator('.pin-me').waitFor();
+    assert.equal(await page.locator('.pin-me').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(26, 115, 232)');
+    assert.equal(await page.locator('.pin-me.pin-bus, .pin-bus .pin-me').count(), 0, 'location marker is not a bus marker');
+    await page.getByRole('heading', { name: 'Near you' }).waitFor();
+    await page.getByRole('button', { name: /Azadpur Terminal/ }).first().waitFor();
+    await page.getByRole('button', { name: 'Reset map view' }).click();
+  });
+  await check('keyboard: map controls are reachable with Tab and show a focus outline', async () => {
+    await page.goto(BASE);
+    let label = '';
+    for (let i = 0; i < 80 && label !== 'Reset map view'; i++) {
+      await page.keyboard.press('Tab');
+      label = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '');
+    }
+    assert.equal(label, 'Reset map view');
+    assert.notEqual(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle), 'none');
+  });
+  await check('nearby: exact route filter narrows stops and arrivals', async () => {
+    await page.goto(`${BASE}/nearby`);
+    await page.getByRole('heading', { name: STOP.name }).waitFor();
+    assert.match(await page.locator('.stand').innerText(), /Stop ID s1/);
+    await page.getByRole('textbox', { name: /Only route/ }).fill('990');
+    const card = await page.locator('.stand').innerText();
+    assert.match(card, /990/);
+    assert.doesNotMatch(card, /534/);
+    await page.getByRole('textbox', { name: /Only route/ }).fill('106');
+    await page.getByText(/No stop within 500 m lists route 106/).waitFor();
+  });
+  await check('language: Hindi labels for navigation and map controls, html lang follows', async () => {
+    await page.goto(BASE);
+    await page.getByRole('button', { name: /Switch to Hindi/ }).click();
+    await page.locator('.topnav').getByText('आस-पास').waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.lang), 'hi');
+    await page.getByRole('button', { name: 'मेरे पास की बसें खोजें' }).waitFor();
+    await page.getByRole('button', { name: /अंग्रेज़ी में बदलें/ }).click();
+    await page.locator('.topnav').getByText('Nearby').waitFor();
   });
   assert.deepEqual(errors, []);
+
+  const denied = await newPage(browser, { noLocation: true });
+  await check('location denied: clear message, no invented position, map and route search still work', async () => {
+    await denied.page.goto(BASE);
+    await denied.page.getByRole('button', { name: 'Find buses near me' }).click();
+    await denied.page.getByText(/Location access is blocked|could not determine|took too long/).waitFor({ timeout: 25000 });
+    assert.equal(await denied.page.locator('.pin-me').count(), 0);
+    await denied.page.goto(`${BASE}/?route=534`);
+    await denied.page.getByText(/^Live feed · 3 buses on route 534/).waitFor();
+  });
+  assert.deepEqual(denied.errors, []);
 
   const fallback = await newPage(browser, { patterns404: true, journey404: true });
   await check('older backend: stops-only route and journey-unavailable message', async () => {

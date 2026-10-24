@@ -8,6 +8,7 @@ import usePolling from '../../hooks/usePolling';
 import { getRouteGeometry, getStopArrivals } from '../../api/client';
 import { ageText, clockText, distanceText, durationText } from '../../utils/format';
 import { placeParam } from '../../utils/journey';
+import { OFF_ROUTE_EXPLANATION, ROUTE_CHECK_TEXT, routeUnconfirmed } from '../../utils/liveMap';
 
 const NEXT_STOP_SOURCE = {
   FEED_STOP_SEQUENCE: 'reported by the feed',
@@ -51,6 +52,12 @@ export function BusPanel({ bus, gone, now, geometry, onBack, backLabel, onShowRo
         </Notice>
       )}
 
+      {routeUnconfirmed(bus) && (
+        <Notice tone="warn">
+          <strong>Route number unconfirmed.</strong> {OFF_ROUTE_EXPLANATION}
+        </Notice>
+      )}
+
       <dl className="facts">
         <dt>Next stop</dt>
         <dd>
@@ -67,7 +74,7 @@ export function BusPanel({ bus, gone, now, geometry, onBack, backLabel, onShowRo
             <dt>Arrives there</dt>
             <dd>
               {bus.nextStopEtaMinutes != null
-                ? <Eta upcoming={{ etaMinutes: bus.nextStopEtaMinutes, availability: bus.nextStopEtaBasis }} showSource />
+                ? <Eta upcoming={{ etaMinutes: bus.nextStopEtaMinutes, availability: bus.nextStopEtaBasis, lastGpsUpdate: bus.lastUpdatedEpochSeconds }} showSource now={now} />
                 : <span className="muted">No reliable estimate</span>}
             </dd>
           </>
@@ -83,6 +90,10 @@ export function BusPanel({ bus, gone, now, geometry, onBack, backLabel, onShowRo
         <dd>{clockText(bus.lastUpdatedEpochSeconds)} <span className="muted">({ageText(bus.lastUpdatedEpochSeconds, now)})</span></dd>
         <dt>Vehicle</dt>
         <dd>{bus.vehicleId}</dd>
+        <dt>Route check</dt>
+        <dd>
+          {ROUTE_CHECK_TEXT[bus.routeCheck] ?? <span className="muted">Not checked by this server</span>}
+        </dd>
       </dl>
 
       {bus.offRouteFlag && (
@@ -114,7 +125,12 @@ export function StopPanel({ stop, now, onBack, backLabel, onSelectBus, onSelectR
     <div className="stack" style={{ gap: 16 }}>
       <BackHeader onBack={onBack} backLabel={backLabel}>
         <span className="stop-badge-icon" aria-hidden="true"><Icon name="pin" size={18} /></span>
-        <h2 className="grow" style={{ fontSize: '1.1rem' }}>{stop.name}</h2>
+        <h2 className="grow" style={{ fontSize: '1.1rem' }}>
+          {stop.name}
+          <span className="small muted" style={{ display: 'block', fontWeight: 500 }}>
+            Stop ID {stop.id}{stand?.members?.length > 1 ? ` · one of ${stand.members.length} stops at this stand` : ''}
+          </span>
+        </h2>
         <FavStopButton stop={stop} />
       </BackHeader>
 

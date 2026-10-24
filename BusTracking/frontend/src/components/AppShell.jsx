@@ -1,15 +1,16 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import Icon from './ui/Icon';
-import { useConnection, useStore } from '../hooks/useStores';
+import { useConnection, useStore, useT } from '../hooks/useStores';
 import { themePreference, cycleTheme } from '../store/theme';
+import { cycleLanguage, language } from '../i18n';
 import { reportBrowserOnline } from '../api/connection';
 
 const PRIMARY = [
-  { to: '/', label: 'Explore', icon: 'map', end: true },
-  { to: '/nearby', label: 'Nearby', icon: 'pin' },
-  { to: '/journey', label: 'Plan', icon: 'route' },
-  { to: '/saved', label: 'Saved', icon: 'star' },
+  { to: '/', label: 'nav.explore', icon: 'map', end: true },
+  { to: '/nearby', label: 'nav.nearby', icon: 'pin' },
+  { to: '/journey', label: 'nav.plan', icon: 'route' },
+  { to: '/saved', label: 'nav.saved', icon: 'star' },
 ];
 
 // Older tools kept available. Several read the legacy database, which on the hosted server only
@@ -79,6 +80,17 @@ function MoreMenu() {
   );
 }
 
+function LanguageButton() {
+  const lang = useStore(language);
+  const t = useT();
+  return (
+    <button type="button" className="icon-btn lang-btn" onClick={cycleLanguage}
+      aria-label={t('lang.button')} title={t('lang.button')}>
+      <span aria-hidden="true">{lang === 'hi' ? 'EN' : 'हि'}</span>
+    </button>
+  );
+}
+
 function ThemeButton() {
   const pref = useStore(themePreference);
   return (
@@ -111,9 +123,10 @@ function ConnectionBanner() {
 }
 
 export default function AppShell({ children, fill }) {
+  const t = useT();
   return (
     <div className="shell">
-      <a className="skip-link" href="#main">Skip to content</a>
+      <a className="skip-link" href="#main">{t('skip')}</a>
       <header className="topbar">
         <Link to="/" className="brand" aria-label="Delhi Bus Live, home">
           <span className="brand-mark"><Icon name="bus" size={20} /></span>
@@ -122,11 +135,12 @@ export default function AppShell({ children, fill }) {
         <nav className="topnav" aria-label="Main">
           {PRIMARY.map(l => (
             <NavLink key={l.to} to={l.to} end={l.end} className="topnav-link">
-              <Icon name={l.icon} size={18} />{l.label}
+              <Icon name={l.icon} size={18} />{t(l.label)}
             </NavLink>
           ))}
         </nav>
         <div className="topbar-end">
+          <LanguageButton />
           <ThemeButton />
           <MoreMenu />
         </div>
@@ -139,7 +153,7 @@ export default function AppShell({ children, fill }) {
         {PRIMARY.map(l => (
           <NavLink key={l.to} to={l.to} end={l.end} className="tab">
             <span className="tab-icon"><Icon name={l.icon} /></span>
-            {l.label}
+            {t(l.label)}
           </NavLink>
         ))}
       </nav>

@@ -1,5 +1,5 @@
 import Icon from './Icon';
-import { busFreshness, ETA_SOURCE_TEXT } from '../../utils/liveMap';
+import { busFreshness, etaStatus, ETA_SOURCE_TEXT, OFF_ROUTE_EXPLANATION, routeUnconfirmed } from '../../utils/liveMap';
 import { ageText, clockText } from '../../utils/format';
 import { toggleRoute, toggleStop, favouriteRoutes, favouriteStops } from '../../store/favourites';
 import { useStore } from '../../hooks/useStores';
@@ -18,14 +18,24 @@ export function FreshnessBadge({ epochSeconds, now }) {
 }
 
 /**
- * Minutes until arrival with how they were obtained. Only a real number is shown as minutes;
- * estimates are prefixed with "≈" and labelled, TripUpdates predictions are not.
+ * Minutes until arrival with how they were obtained. Only a plausible number backed by a GPS fix
+ * under 2 minutes old is shown as minutes; estimates are prefixed with "≈" and labelled,
+ * TripUpdates predictions are not.
  */
-export function Eta({ upcoming, showSource = false }) {
-  const m = upcoming?.etaMinutes;
-  if (m == null || !Number.isFinite(m)) {
+export function Eta({ upcoming, showSource = false, now = Date.now() / 1000 }) {
+  const status = etaStatus(upcoming, now);
+  if (status === 'stale') {
+    return (
+      <span className="stack" style={{ gap: 0, justifyItems: 'end' }}>
+        <span className="eta-none">Out of date</span>
+        {showSource && <span className="small muted">GPS over 2 min old</span>}
+      </span>
+    );
+  }
+  if (status !== 'ok') {
     return <span className="eta-none">No estimate</span>;
   }
+  const m = upcoming.etaMinutes;
   const exact = upcoming.availability === 'TRIP_UPDATE';
   const minutes = Math.max(0, Math.round(m));
   const source = ETA_SOURCE_TEXT[upcoming.availability] ?? 'Estimate';
@@ -37,6 +47,28 @@ export function Eta({ upcoming, showSource = false }) {
         {minutes >= 1 && <small aria-hidden="true">min</small>}
       </span>
       {showSource && <span className="small muted">{source}</span>}
+    </span>
+  );
+}
+
+/** Route number chip; "?" and a dotted outline when the bus's position doesn't fit the route. */
+export function RouteChip({ upcoming }) {
+  const unconfirmed = routeUnconfirmed(upcoming);
+  return (
+    <span className={`route-chip${unconfirmed ? ' route-chip-unconfirmed' : ''}`}
+      title={unconfirmed ? OFF_ROUTE_EXPLANATION : undefined}
+      aria-label={unconfirmed ? `Route ${upcoming.routeNumber}, unconfirmed` : undefined}>
+      {upcoming.routeNumber}{unconfirmed && <span aria-hidden="true">?</span>}
+    </span>
+  );
+}
+
+/** "Route unconfirmed" marker for a bus or arrival whose position doesn't fit its route number. */
+export function RouteCheckNote({ item }) {
+  if (!routeUnconfirmed(item)) return null;
+  return (
+    <span className="badge badge-unconfirmed" title={OFF_ROUTE_EXPLANATION}>
+      <Icon name="alert" size={13} /> Route unconfirmed
     </span>
   );
 }

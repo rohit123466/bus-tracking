@@ -151,6 +151,59 @@ export const ETA_SOURCE_TEXT = {
   UNAVAILABLE: 'No reliable estimate',
 };
 
+/**
+ * Whether a bus's GPS fix fits the route number shown for it (`routeCheck` from the backend).
+ * Only OFF_ROUTE is treated as a warning; a backend that predates the field sends nothing, which
+ * is shown as "not checked" rather than as confirmed.
+ */
+export const ROUTE_CHECK_TEXT = {
+  TRIP_MATCH: 'Route confirmed by the timetable trip',
+  ON_ROUTE: 'On this route’s timetable path',
+  OFF_ROUTE: 'Route number unconfirmed',
+  NO_STOPS: 'Route can’t be checked (no timetable stops)',
+};
+
+export const routeUnconfirmed = bus => bus?.routeCheck === 'OFF_ROUTE';
+
+/** Longer explanation for a bus whose route number does not fit its position. */
+export const OFF_ROUTE_EXPLANATION =
+  'This bus is more than 500 m from every stop of the route the live feed gives it. It may be at a depot or on a diversion, or the feed’s route mapping may be out of date, so it may not be running this route.';
+
+/** ETAs above this, or clearly negative, are treated as invalid rather than shown. */
+export const MAX_ETA_MINUTES = 180;
+/** Matches the backend: a GPS fix older than this is no longer a live position. */
+export const GPS_STALE_AFTER_S = 120;
+
+/**
+ * Whether an upcoming-bus ETA may be shown as a number right now:
+ * 'ok', 'none' (no estimate), 'invalid' (not a plausible number), or 'stale' (its GPS fix has aged
+ * past 2 minutes, e.g. while refreshes are failing, so the countdown no longer means anything).
+ */
+export function etaStatus(upcoming, now = Date.now() / 1000) {
+  const m = upcoming?.etaMinutes;
+  if (m == null || !Number.isFinite(m)) return 'none';
+  if (m < -1 || m > MAX_ETA_MINUTES) return 'invalid';
+  const gps = upcoming.lastGpsUpdate;
+  if (Number.isFinite(gps) && gps > 0 && now - gps > GPS_STALE_AFTER_S) return 'stale';
+  return 'ok';
+}
+
+/**
+ * Stands served by `route` (exact public number), each narrowed to that route's arrivals. With no
+ * route, the stands are returned unchanged. Stop coordinates and serving routes come from the
+ * timetable, so a stand that lists the route is kept even when no bus is tracked to it.
+ */
+export function filterStandsByRoute(stands, route) {
+  const wanted = (route ?? '').trim().toUpperCase();
+  if (!wanted) return stands ?? [];
+  return (stands ?? [])
+    .filter(s => (s.routeNumbers ?? []).some(r => String(r).toUpperCase() === wanted))
+    .map(s => {
+      const upcoming = (s.upcoming ?? []).filter(u => String(u.routeNumber ?? '').toUpperCase() === wanted);
+      return { ...s, routeNumbers: [wanted], upcoming, liveCount: upcoming.length };
+    });
+}
+
 /** Soonest first; entries without a numeric ETA last, then by route number. */
 export function sortByEta(list) {
   return [...(list ?? [])].sort((a, b) =>

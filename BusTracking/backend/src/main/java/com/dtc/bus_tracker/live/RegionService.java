@@ -58,6 +58,23 @@ public class RegionService {
   public static final String SOURCE_INFERRED = "INFERRED_FROM_GPS_ON_ROUTE";
   public static final String SOURCE_LEARNED = "LEARNED_ROUTE_PATH";
 
+  /**
+   * How far the route number shown for a bus is backed by the data. The live feed mostly reports
+   * trip IDs the static timetable lacks, so the number usually comes from the feed's route_id via
+   * routes.txt, a mapping that may be out of date. The GPS fix is compared with that route's
+   * timetable stops to say whether the label is plausible; it never picks a different route.
+   */
+  /** The feed's trip_id is in the timetable and belongs to this route. */
+  public static final String CHECK_TRIP = "TRIP_MATCH";
+  /** The bus is within {@link #ROUTE_CHECK_METERS} of the route's timetable stop path. */
+  public static final String CHECK_ON_ROUTE = "ON_ROUTE";
+  /** Farther than that from every stop pattern: depot, diversion or an outdated route_id. */
+  public static final String CHECK_OFF_ROUTE = "OFF_ROUTE";
+  /** The route has no timetable stops to compare the position with. */
+  public static final String CHECK_NO_STOPS = "NO_STOPS";
+  /** Lenient: straight lines between stops cut corners that the road goes around. */
+  static final double ROUTE_CHECK_METERS = 500;
+
   public record RegionalBus(
       String vehicleId,
       String routeId,
@@ -78,7 +95,9 @@ public class RegionService {
       String nextStopSource,
       Double nextStopDistanceMeters,
       Double nextStopEtaMinutes,
-      String nextStopEtaBasis) {}
+      String nextStopEtaBasis,
+      /** One of the CHECK_* values: whether the GPS fix fits the route number shown. */
+      String routeCheck) {}
 
   public record RegionalBuses(
       List<RegionalBus> buses,
@@ -111,7 +130,9 @@ public class RegionService {
       Double busLongitude,
       Double speedKmh,
       /** Distance still to travel to the stop along the route's stops; null when unknown. */
-      Double distanceMeters) {}
+      Double distanceMeters,
+      /** One of the CHECK_* values: whether the GPS fix fits the route number shown. */
+      String routeCheck) {}
 
   public record RegionalStop(
       String id,
@@ -291,7 +312,8 @@ public class RegionService {
           byNumber.getOrDefault(b.routeCode(), EnumSet.noneOf(TransitIndex.Region.class)).stream()
               .map(Enum::name)
               .toList();
-      var next = nextStop(vehicles.get(b.vehicleId()));
+      var vehicle = vehicles.get(b.vehicleId());
+      var next = nextStop(vehicle);
       out.add(
           new RegionalBus(
               b.vehicleId(), b.routeId(), b.routeCode(), b.direction(), b.tripId(),
@@ -302,9 +324,16 @@ public class RegionService {
               next == null ? null : next.source(),
               next == null ? null : next.distance(),
               next == null ? null : next.etaMinutes(),
-              next == null || next.etaMinutes() == null ? null : next.basis()));
+              next == null || next.etaMinutes() == null ? null : next.basis(),
+              vehicle == null ? CHECK_NO_STOPS : routeCheck(vehicle, index.routes.get(b.routeId()))));
     }
     List<String> warnings = new ArrayList<>(all.warnings());
+    long offRoute = out.stream().filter(b -> CHECK_OFF_ROUTE.equals(b.routeCheck())).count();
+    if (offRoute > 0)
+      warnings.add(
+          offRoute + " shown buses are more than " + (int) ROUTE_CHECK_METERS + " m from every"
+              + " timetable stop of the route number the feed gives them, so that number is"
+              + " unconfirmed (depot, diversion, or an outdated route mapping).");
     long unknownTrips = out.stream().filter(b -> !index.trips.containsKey(b.tripId())).count();
     if (unknownTrips > 0)
       warnings.add(
@@ -383,6 +412,46 @@ public class RegionService {
       }
     }
     return built.getOrDefault(routeId, List.of());
+  }
+
+  /** route_id -> each stop pattern as points, for {@link #routeCheck}. Static data, so cached. */
+  private final Map<String, List<List<TransitIndex.Point>>> patternPaths =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
+  private List<List<TransitIndex.Point>> patternPaths(String routeId) {
+    return patternPaths.computeIfAbsent(routeId, id -> {
+      List<List<TransitIndex.Point>> out = new ArrayList<>();
+      for (var trip : patterns(id)) {
+        List<TransitIndex.Point> points = new ArrayList<>();
+        for (var visit : trip.visits()) {
+          var s = index.stops.get(visit.stopId());
+          if (s != null) points.add(new TransitIndex.Point(s.lat(), s.lng(), visit.sequence()));
+        }
+        if (!points.isEmpty()) out.add(List.copyOf(points));
+      }
+      return List.copyOf(out);
+    });
+  }
+
+  /**
+   * One of the CHECK_* values for the route number shown for {@code v}. Only says whether the GPS
+   * fix is consistent with that route's timetable stops; a nearby different route is never
+   * substituted, because proximity alone does not identify the route a bus is running.
+   */
+  String routeCheck(RealtimeSnapshot.Vehicle v, TransitIndex.Route route) {
+    if (route == null) return CHECK_NO_STOPS;
+    var trip = index.trips.get(v.tripId());
+    if (trip != null && trip.routeId().equals(route.id())) return CHECK_TRIP;
+    var paths = patternPaths(route.id());
+    if (paths.isEmpty()) return CHECK_NO_STOPS;
+    for (var path : paths) {
+      double offset =
+          path.size() == 1
+              ? Geometry.distance(v.lat(), v.lng(), path.get(0).lat(), path.get(0).lng())
+              : Geometry.project(path, v.lat(), v.lng()).offset();
+      if (offset <= ROUTE_CHECK_METERS) return CHECK_ON_ROUTE;
+    }
+    return CHECK_OFF_ROUTE;
   }
 
   /**
@@ -494,15 +563,19 @@ public class RegionService {
       "Rough estimate: bus is stopped or slow right now, so its distance along the route is divided"
           + " by a typical city-bus speed of " + (int) TYPICAL_BUS_SPEED_KMH + " km/h";
 
-  /** Builds an {@link Upcoming}, attaching the vehicle's live position when it is known. */
-  static Upcoming upcomingOf(
+  /**
+   * Builds an {@link Upcoming}, attaching the vehicle's live position and how well that position
+   * fits the route number when the vehicle is known.
+   */
+  Upcoming upcomingOf(
       String routeNumber, String vehicleId, Double eta, String availability, String label,
       String reason, Integer remainingStops, long lastGps, RealtimeSnapshot.Vehicle v,
       Double distanceMeters) {
     return new Upcoming(
         routeNumber, vehicleId, eta, availability, label, reason, remainingStops, lastGps,
         v == null ? null : v.lat(), v == null ? null : v.lng(), v == null ? null : v.speedKmh(),
-        distanceMeters == null ? null : Math.round(distanceMeters * 10.0) / 10.0);
+        distanceMeters == null ? null : Math.round(distanceMeters * 10.0) / 10.0,
+        v == null ? CHECK_NO_STOPS : routeCheck(v, transit.route(v)));
   }
 
   /**

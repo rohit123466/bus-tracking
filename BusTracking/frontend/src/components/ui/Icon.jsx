@@ -29,6 +29,8 @@ const PATHS = {
   arrowRight: 'M5 12h14m-6-6 6 6-6 6',
   swap: 'M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3',
   fit: 'M4 9V4h5M20 9V4h-5M4 15v5h5m11-5v5h-5',
+  resetView: 'M3 12a9 9 0 1 0 2.6-6.4L3 8m0-5v5h5M12 8v4l3 2',
+  nearMe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-4-4 4-10 4 10-4-2-4 2Z',
   trash: 'M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3',
   home: 'M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9Z',
   briefcase: 'M4 8h16v11H4V8Zm5 0V5h6v3M4 13h16',

@@ -107,6 +107,8 @@
 .lg { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .lg-live { background: var(--live); }
 .lg-delayed { background: var(--delayed); }
+.lg-unconfirmed { background: var(--surface); border: 2px dotted var(--text-2); width: 12px; height: 12px; }
+.lg-me { background: #1a73e8; border: 2px solid #fff; box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.35); }
 
 .swatch { display: inline-block; width: 22px; height: 4px; border-radius: 2px; flex: none; }
 .swatch-0 { background: var(--route-0); }
@@ -209,6 +211,8 @@ div.arr-row { border-bottom: 1px solid var(--border); }
 .page-head h1 { font-size: 1.5rem; }
 .page-head p { margin: 0; color: var(--text-2); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.check-row { min-height: 44px; cursor: pointer; }
+.check-row input { width: 20px; height: 20px; flex: none; }
 
 .stand { overflow: hidden; }
 .stand-head {

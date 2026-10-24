@@ -1,10 +1,9 @@
 import { forwardRef, useEffect } from 'react';
 import { MapContainer, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
-
-const DELHI_CENTER = [28.6139, 77.209];
+import { DELHI_CENTER, DELHI_ZOOM } from '../../utils/geo';
 
 /** Leaflet map with OSM tiles, bottom-right zoom buttons and resize handling. */
-const BaseMap = forwardRef(function BaseMap({ children, center = DELHI_CENTER, zoom = 12 }, ref) {
+const BaseMap = forwardRef(function BaseMap({ children, center = DELHI_CENTER, zoom = DELHI_ZOOM }, ref) {
   return (
     <MapContainer
       ref={ref}

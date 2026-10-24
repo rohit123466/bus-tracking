@@ -258,6 +258,7 @@
 }
 .route-chip-lg { height: 2.25rem; min-width: 3.25rem; font-size: 1.05rem; border-radius: 8px; }
 .route-chip-quiet { background: var(--surface-3); color: var(--text); }
+.route-chip-unconfirmed { background: var(--surface); color: var(--text); border: 2px dotted var(--text-2); }
 button.route-chip { border: 0; cursor: pointer; min-height: 36px; height: auto; }
 
 .badge {
@@ -276,6 +277,8 @@ button.route-chip { border: 0; cursor: pointer; min-height: 36px; height: auto; 
 .badge-delayed { background: var(--delayed-soft); color: var(--delayed); }
 .badge-danger { background: var(--danger-soft); color: var(--danger); }
 .badge-info { background: var(--info-soft); color: var(--info); }
+/* Dashed outline as well as colour, so "unconfirmed" never relies on colour alone. */
+.badge-unconfirmed { background: var(--surface); color: var(--danger); border: 1px dashed currentColor; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
 .dot-pulse { animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.35; } }
@@ -574,6 +577,9 @@ button.route-chip { border: 0; cursor: pointer; min-height: 36px; height: auto; 
 /* Older fix: outlined rather than filled, so it reads as less certain than a live position. */
 .pin-bus-delayed { background: var(--surface); color: var(--delayed); border: 2px dashed var(--delayed); }
 [data-theme='dark'] .pin-bus-delayed { color: var(--delayed); border-color: var(--delayed); }
+/* Route number not backed by the bus's position: hollow, dotted, and suffixed with "?". */
+.pin-bus-unconfirmed,
+[data-theme='dark'] .pin-bus-unconfirmed { background: var(--surface); color: var(--text-2); border: 2px dotted var(--text-2); }
 .pin-bus-selected {
   height: 30px;
   padding: 0 10px;
@@ -618,3 +624,5 @@ button.route-chip { border: 0; cursor: pointer; min-height: 36px; height: auto; 
   border: 3px solid var(--surface);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
 }
+
+.lang-btn { font-weight: 700; font-size: 0.875rem; }

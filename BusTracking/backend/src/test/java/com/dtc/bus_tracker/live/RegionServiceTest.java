@@ -253,6 +253,37 @@ class RegionServiceTest {
   }
 
   @Test
+  void routeCheckSaysWhetherTheGpsFixFitsTheRouteNumberShown() {
+    feed(
+        vehicle("known", "rA", "tA", new double[] {MID_A[0], 77.20}, null, 0), // timetable trip
+        vehicle("onPath", "rA", "rA_23_99", MID_A, null, 10), // unknown trip, on 100's path
+        vehicle("farAway", "rA", "rA_23_98", new double[] {MID_A[0], 77.20}, null, 0)); // ~7 km off
+    var byId = busesById();
+    assertEquals(RegionService.CHECK_TRIP, byId.get("known").routeCheck());
+    assertEquals(RegionService.CHECK_ON_ROUTE, byId.get("onPath").routeCheck());
+    var far = byId.get("farAway");
+    assertEquals(RegionService.CHECK_OFF_ROUTE, far.routeCheck());
+    // Still shown under the number the feed gives it, never relabelled to a nearer route.
+    assertEquals("100", far.routeCode());
+    assertTrue(regions.buses(RegionService.Filter.ANY, "", false).warnings().stream()
+        .anyMatch(w -> w.contains("1 shown buses") && w.contains("unconfirmed")));
+  }
+
+  @Test
+  void routeWithoutTimetableStopsCannotBeChecked() {
+    index.routes.put("rE", new TransitIndex.Route("rE", "100", "100UP", "UP", true));
+    feed(vehicle("bare", "rE", "rE_1", MID_A, null, 10));
+    assertEquals(RegionService.CHECK_NO_STOPS, busesById().get("bare").routeCheck());
+  }
+
+  @Test
+  void upcomingArrivalCarriesTheRouteCheck() {
+    feed(vehicle("onPath", "rA", "rA_23_99", MID_A, null, 10));
+    var u = regions.upcoming("nw", Set.of("100"), new ArrayList<>()).get(0);
+    assertEquals(RegionService.CHECK_ON_ROUTE, u.routeCheck());
+  }
+
+  @Test
   void ineligibleRouteIsNeverAnUpcomingArrival() {
     feed(vehicle("mid", "rA", "tA", MID_A, null, 10));
     assertTrue(regions.upcoming("nw", Set.of("300"), new ArrayList<>()).isEmpty());
@@ -334,6 +365,17 @@ class RegionServiceTest {
     assertEquals("Rohini Sec 7", bus.nextStopName());
     assertEquals(RegionService.SOURCE_LEARNED, bus.nextStopSource());
     assertEquals("LEARNED_ROUTE_ESTIMATE", bus.nextStopEtaBasis());
+  }
+
+  @Test
+  void learnedPathArrivalFarFromTheTimetableRouteIsMarkedUnconfirmed() {
+    learnRoute500();
+    // A trip the timetable lacks: the number 500 comes only from the feed's route_id, and the
+    // learned path was built from that same route_id, so it cannot confirm the number.
+    feed(vehicle("live500", "rL", "rL_23_7", new double[] {28.715, 77.10}, null, 10, 0f));
+    var up = regions.upcoming("L2", Set.of("500"), new ArrayList<>());
+    assertEquals("LEARNED_ROUTE_ESTIMATE", up.get(0).availability());
+    assertEquals(RegionService.CHECK_OFF_ROUTE, up.get(0).routeCheck());
   }
 
   @Test

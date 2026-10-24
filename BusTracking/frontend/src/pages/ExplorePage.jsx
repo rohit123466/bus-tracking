@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import BaseMap, { FitBounds, ViewTracker } from '../components/map/MapBase';
+import { DELHI_CENTER, DELHI_ZOOM } from '../utils/geo';
 import {
   BusLayer, RouteLayer, StopPins, SelectedStop, UserMarker, WalkLine,
 } from '../components/map/TransitLayers';
@@ -17,23 +18,29 @@ import Icon from '../components/ui/Icon';
 import usePolling from '../hooks/usePolling';
 import useUserLocation from '../hooks/useUserLocation';
 import useWalkingNavigation from '../hooks/useWalkingNavigation';
-import { useMediaQuery, useNow, useStore } from '../hooks/useStores';
+import { useMediaQuery, useNow, useStore, useT } from '../hooks/useStores';
+import { createPersistentStore } from '../store/persistent';
 import {
   getRegionalBuses, getRegionalStops, getRouteGeometry, getServiceAlerts, searchTransitStops,
 } from '../api/client';
 import { visibleBuses } from '../utils/navigation';
-import { DEFAULT_REGION, feedState, groupStands } from '../utils/liveMap';
+import { DEFAULT_REGION, feedState, groupStands, routeUnconfirmed } from '../utils/liveMap';
 import { addRecent } from '../store/favourites';
 import { themePreference } from '../store/theme';
 import { ageText, clockText, plural } from '../utils/format';
 
 const noop = () => {};
 
-function StatusPill({ state, count, updatedAt, now, route }) {
+// Remembered per browser: whether buses whose route number doesn't fit their position are hidden.
+const hideUnconfirmedPref = createPersistentStore('dtc_hide_unconfirmed', false, v => typeof v === 'boolean');
+
+function StatusPill({ state, count, unconfirmed, hidden, updatedAt, now, route }) {
   const what = route ? ` on route ${route}` : '';
+  const check = hidden ? ` (${hidden} with an unconfirmed route hidden)`
+    : unconfirmed ? ` (${unconfirmed} with an unconfirmed route)` : '';
   const text = {
     loading: 'Connecting to the live bus feed…',
-    live: `Live feed · ${plural(count, 'bus', 'buses')}${what} · updated ${ageText(updatedAt / 1000, now)}`,
+    live: `Live feed · ${plural(count, 'bus', 'buses')}${what}${check} · updated ${ageText(updatedAt / 1000, now)}`,
     stale: `Not updating · last update ${clockText(updatedAt)}. Buses with GPS older than 2 min are hidden.`,
     // The server keeps recent positions when a feed poll fails; each is still ≤ 2 min old.
     down: count
@@ -63,6 +70,7 @@ export default function ExplorePage() {
   const [panelOpen, setPanelOpen] = useState(true);
   const now = useNow(5000);
   const gps = useUserLocation();
+  const t = useT();
   useStore(themePreference); // re-render so canvas layers pick up the theme's colours
   const colors = themeColors();
 
@@ -80,8 +88,15 @@ export default function ExplorePage() {
   // ── Data ──────────────────────────────────────────────────────────────────
   const busesQ = usePolling(`${region}|${route}`, s => getRegionalBuses({ region, routeNumber: route }, s), { interval: 10000 });
   // Re-filtered against the ticking clock: a position older than 2 min disappears even if polling stalls.
-  const buses = useMemo(() => visibleBuses(busesQ.data?.buses ?? [], route, now), [busesQ.data, route, now]);
-  const liveIds = useMemo(() => new Set(buses.map(b => b.vehicleId)), [buses]);
+  const allBuses = useMemo(() => visibleBuses(busesQ.data?.buses ?? [], route, now), [busesQ.data, route, now]);
+  const liveIds = useMemo(() => new Set(allBuses.map(b => b.vehicleId)), [allBuses]);
+  // Map, route list and status pill all use this one list, so they always agree.
+  const hideUnconfirmed = useStore(hideUnconfirmedPref);
+  const unconfirmedCount = useMemo(() => allBuses.filter(routeUnconfirmed).length, [allBuses]);
+  const buses = useMemo(
+    () => (hideUnconfirmed ? allBuses.filter(b => !routeUnconfirmed(b) || b.vehicleId === busId) : allBuses),
+    [allBuses, hideUnconfirmed, busId],
+  );
   const feed = feedState(busesQ, now * 1000);
 
   const geometryQ = usePolling(route ? `geo|${route}` : null, s => getRouteGeometry(route, s), { interval: 0 });
@@ -107,7 +122,7 @@ export default function ExplorePage() {
   }, [stopId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The selected bus, or its last known record once it stops reporting.
-  const liveBus = buses.find(b => b.vehicleId === busId) ?? null;
+  const liveBus = allBuses.find(b => b.vehicleId === busId) ?? null;
   const [lastBus, setLastBus] = useState(null);
   useEffect(() => { if (liveBus) setLastBus(liveBus); }, [liveBus]);
   const bus = liveBus ?? (lastBus?.vehicleId === busId ? lastBus : null);
@@ -123,6 +138,15 @@ export default function ExplorePage() {
     const fix = await gps.locate();
     if (fix && map) map.setView([fix.lat, fix.lng], Math.max(map.getZoom(), 15));
   };
+  // Clears the selection so the overview's "Near you" list (nearest stands and their next buses)
+  // shows, and centres on the fresh fix. Without a fix the panel explains why.
+  const findNearMe = async () => {
+    select({ route: '', bus: '', stop: '' });
+    openPanel();
+    const fix = await gps.locate();
+    if (fix && map) map.setView([fix.lat, fix.lng], Math.max(map.getZoom(), 15));
+  };
+  const resetView = () => map?.setView(DELHI_CENTER, DELHI_ZOOM);
 
   const routePoints = useMemo(() => [
     ...(geometry?.stops ?? []).map(s => [s.lat, s.lng]),
@@ -156,7 +180,8 @@ export default function ExplorePage() {
   } else if (route) {
     panel = (
       <RoutePanel
-        route={route} buses={buses} busesQuery={busesQ} geometryQuery={geometryQ} now={now}
+        route={route} buses={buses} hiddenUnconfirmed={hideUnconfirmed ? unconfirmedCount : 0}
+        busesQuery={busesQ} geometryQuery={geometryQ} now={now}
         onSelectBus={selectBus} onClose={() => select({ route: '', bus: '' })}
         onFit={routePoints.length > 1 ? fitRoute : null}
       />
@@ -184,7 +209,13 @@ export default function ExplorePage() {
         <div className="side-head">
           <h1 className="vh">Explore live buses</h1>
           <RouteSearch onSelect={selectRoute} />
-          {!route && <RegionSelect value={region} onChange={setRegion} />}
+          <div className="row wrap" style={{ gap: 12 }}>
+            {!route && <RegionSelect value={region} onChange={setRegion} />}
+            <label className="row small check-row">
+              <input type="checkbox" checked={hideUnconfirmed} onChange={e => hideUnconfirmedPref.set(e.target.checked)} />
+              {t('map.hideUnconfirmed')}
+            </label>
+          </div>
         </div>
         <div className="side-body" id="explore-panel-body">
           {panel}
@@ -214,7 +245,8 @@ export default function ExplorePage() {
           <FitBounds fitKey={here && !route && !stopId && !busId ? 'me' : null} points={here ? [[here.lat, here.lng]] : []} />
         </BaseMap>
 
-        <StatusPill state={feed} count={buses.length} updatedAt={busesQ.updatedAt} now={now} route={route} />
+        <StatusPill state={feed} count={buses.length} now={now} route={route} updatedAt={busesQ.updatedAt}
+          unconfirmed={hideUnconfirmed ? 0 : unconfirmedCount} hidden={hideUnconfirmed ? unconfirmedCount : 0} />
 
         <div className="map-ctrls">
           {isDesktop && (
@@ -224,19 +256,28 @@ export default function ExplorePage() {
             </button>
           )}
           <button type="button" className="map-btn" onClick={locate} disabled={gps.status === 'unsupported'}
-            aria-label="Show my location" title="Show my location">
+            aria-label={t('map.locate')} title={t('map.locate')}>
             <Icon name="locate" />
           </button>
+          <button type="button" className="map-btn" onClick={findNearMe} disabled={gps.status === 'unsupported'}
+            aria-label={t('map.nearMe')} title={t('map.nearMe')}>
+            <Icon name="nearMe" />
+          </button>
           {route && routePoints.length > 1 && (
-            <button type="button" className="map-btn" onClick={fitRoute} aria-label={`Fit map to route ${route}`} title="Fit to route">
+            <button type="button" className="map-btn" onClick={fitRoute} aria-label={t('map.fitRoute', { route })} title={t('map.fitRoute', { route })}>
               <Icon name="fit" />
             </button>
           )}
+          <button type="button" className="map-btn" onClick={resetView} aria-label={t('map.reset')} title={t('map.reset')}>
+            <Icon name="resetView" />
+          </button>
         </div>
 
         <div className="map-legend" aria-hidden="true">
-          <span><i className="lg lg-live" />Live GPS</span>
-          <span><i className="lg lg-delayed" />GPS 30 s–2 min old</span>
+          <span><i className="lg lg-live" />{t('legend.live')}</span>
+          <span><i className="lg lg-delayed" />{t('legend.delayed')}</span>
+          {unconfirmedCount > 0 && !hideUnconfirmed && <span><i className="lg lg-unconfirmed" />{t('legend.unconfirmed')}</span>}
+          {gps.location && <span><i className="lg lg-me" />{t('legend.you')}</span>}
         </div>
       </section>
     </div>

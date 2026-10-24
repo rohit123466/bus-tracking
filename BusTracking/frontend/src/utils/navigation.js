@@ -1,3 +1,5 @@
+import { inDelhiNcr } from './geo.js';
+
 export function distance(a, b) {
   const rad = n => n * Math.PI / 180;
   const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2;
@@ -26,9 +28,11 @@ export function progress(coordinates, location) {
  *  1. vehicleId must be a non-empty string.
  *  2. routeCode must exactly match routeNumber when a route is selected.
  *     Both are uppercased before comparison so "534a" === "534A".
- *  3. busLatitude and busLongitude must be finite numbers.
+ *  3. busLatitude and busLongitude must be valid coordinates inside Delhi NCR
+ *     (finite, in range, not the 0,0 "no fix" placeholder).
  *  4. GPS timestamp must be fresh (within 120 s, no more than 30 s in future).
- *  5. Deduplicated by vehicleId — last-write wins via Map insertion order.
+ *  5. Deduplicated by vehicleId — the newest GPS fix wins, so a repeated or
+ *     out-of-order record can never move a marker back to an older position.
  *
  * @param {Array} buses - Raw bus array from the API response.
  * @param {string} routeNumber - Selected route public number (e.g. "534"), or "".
@@ -36,13 +40,18 @@ export function progress(coordinates, location) {
  */
 export function visibleBuses(buses, routeNumber, now = Date.now() / 1000) {
   const selectedRoute = routeNumber ? routeNumber.trim().toUpperCase() : '';
-  return [...new Map(buses.filter(b =>
-    b.vehicleId &&
-    // Exact route match (case-insensitive), or no route selected.
-    (!selectedRoute || (b.routeCode != null && b.routeCode.toString().toUpperCase() === selectedRoute)) &&
-    Number.isFinite(b.busLatitude) && Number.isFinite(b.busLongitude) &&
-    b.lastUpdatedEpochSeconds > 0 &&
-    now - b.lastUpdatedEpochSeconds <= 120 &&
-    now - b.lastUpdatedEpochSeconds >= -30)
-    .map(b => [b.vehicleId, b])).values()];
+  const byId = new Map();
+  for (const b of buses ?? []) {
+    const ok = b && b.vehicleId &&
+      // Exact route match (case-insensitive), or no route selected.
+      (!selectedRoute || (b.routeCode != null && b.routeCode.toString().toUpperCase() === selectedRoute)) &&
+      inDelhiNcr(b.busLatitude, b.busLongitude) &&
+      b.lastUpdatedEpochSeconds > 0 &&
+      now - b.lastUpdatedEpochSeconds <= 120 &&
+      now - b.lastUpdatedEpochSeconds >= -30;
+    if (!ok) continue;
+    const prev = byId.get(b.vehicleId);
+    if (!prev || b.lastUpdatedEpochSeconds >= prev.lastUpdatedEpochSeconds) byId.set(b.vehicleId, b);
+  }
+  return [...byId.values()];
 }

@@ -1,5 +1,5 @@
 import { Circle, CircleMarker, Marker, Polyline, Tooltip } from 'react-leaflet';
-import { busFreshness } from '../../utils/liveMap';
+import { busFreshness, routeUnconfirmed } from '../../utils/liveMap';
 import { busPin, stopPin, mePin } from '../../utils/mapIcons';
 
 /** Zoom from which buses are drawn as labelled route-number pins instead of dots. */
@@ -17,21 +17,24 @@ export function BusLayer({ buses, now, view, selectedId, onSelect, colors }) {
   return buses.map(b => {
     const freshness = busFreshness(b, now);
     const selected = b.vehicleId === selectedId;
+    const unconfirmed = routeUnconfirmed(b);
     const position = [b.busLatitude, b.busLongitude];
     const select = { click: () => onSelect(b) };
+    const label = `Route ${b.routeCode}${unconfirmed ? ' (unconfirmed)' : ''}`;
     if (!selected && !detailed) {
+      const fill = freshness === 'LIVE' ? colors.live : colors.delayed;
       return (
         <CircleMarker
           key={b.vehicleId}
           center={position}
           radius={5}
-          pathOptions={{
-            color: colors.surface, weight: 1.5, fillOpacity: 1,
-            fillColor: freshness === 'LIVE' ? colors.live : colors.delayed,
-          }}
+          // Unconfirmed route: hollow ring instead of a filled dot.
+          pathOptions={unconfirmed
+            ? { color: colors.text, weight: 2, dashArray: '2 2', fillColor: colors.surface, fillOpacity: 1 }
+            : { color: colors.surface, weight: 1.5, fillOpacity: 1, fillColor: fill }}
           eventHandlers={select}
         >
-          <Tooltip direction="top" offset={[0, -4]}>Route {b.routeCode}{freshness === 'DELAYED' ? ' · GPS delayed' : ''}</Tooltip>
+          <Tooltip direction="top" offset={[0, -4]}>{label}{freshness === 'DELAYED' ? ' · GPS delayed' : ''}</Tooltip>
         </CircleMarker>
       );
     }
@@ -40,10 +43,10 @@ export function BusLayer({ buses, now, view, selectedId, onSelect, colors }) {
       <Marker
         key={b.vehicleId}
         position={position}
-        icon={busPin(b.routeCode, freshness, selected)}
+        icon={busPin(b.routeCode, freshness, selected, unconfirmed)}
         zIndexOffset={selected ? 2000 : 0}
         eventHandlers={select}
-        title={`Route ${b.routeCode}`}
+        title={label}
       />
     );
   });

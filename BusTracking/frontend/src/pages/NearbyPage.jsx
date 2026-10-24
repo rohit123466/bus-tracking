@@ -15,9 +15,9 @@ import usePolling from '../hooks/usePolling';
 import useUserLocation from '../hooks/useUserLocation';
 import { useNow } from '../hooks/useStores';
 import { getRegionalStops, getNearbyGtfsStops } from '../api/client';
-import { approachingBuses, groupStands } from '../utils/liveMap';
+import { approachingBuses, filterStandsByRoute, groupStands } from '../utils/liveMap';
 import { ageText, distanceText, plural } from '../utils/format';
-import { Eta } from '../components/ui/Badges';
+import { Eta, RouteChip } from '../components/ui/Badges';
 
 const RADII = [300, 500, 1000, 2000];
 
@@ -26,6 +26,8 @@ export default function NearbyPage() {
   const now = useNow(5000);
   const [radius, setRadius] = useState(500);
   const [onlyTracked, setOnlyTracked] = useState(false);
+  const [routeFilter, setRouteFilter] = useState('');
+  const route = routeFilter.trim().toUpperCase();
   const here = gps.location;
   // Rounded to ~100 m so GPS jitter does not refetch on every position update.
   const key = here ? `${here.lat.toFixed(3)},${here.lng.toFixed(3)}|${radius}` : null;
@@ -33,9 +35,14 @@ export default function NearbyPage() {
   const q = usePolling(key, s => getRegionalStops({ lat: here.lat, lng: here.lng, radiusMeters: radius, limit: 60 }, s), {
     interval: 20000, keepPrevious: true,
   });
-  const stands = useMemo(() => groupStands(q.data?.stops), [q.data]);
-  const soon = useMemo(() => approachingBuses(q.data?.stops).filter(b => b.etaMinutes != null).slice(0, 6), [q.data]);
-  const outside = q.data && stands.length === 0;
+  const allStands = useMemo(() => groupStands(q.data?.stops), [q.data]);
+  // The route filter narrows the stand list and its arrivals with the same exact-number rule as
+  // the map, so "route 106" never lists 106A.
+  const stands = useMemo(() => filterStandsByRoute(allStands, route), [allStands, route]);
+  const soon = useMemo(() => approachingBuses(q.data?.stops)
+    .filter(b => b.etaMinutes != null && (!route || String(b.routeNumber).toUpperCase() === route))
+    .slice(0, 6), [q.data, route]);
+  const outside = q.data && allStands.length === 0;
   // Outside the covered area: still list stops and their routes, without arrival estimates.
   const plainQ = usePolling(outside ? key : null, s => getNearbyGtfsStops(here.lat, here.lng, radius, 20, s), { interval: 0 });
 
@@ -60,10 +67,22 @@ export default function NearbyPage() {
                 <button key={r} type="button" aria-pressed={radius === r} onClick={() => setRadius(r)}>{distanceText(r)}</button>
               ))}
             </div>
-            <label className="row small">
-              <input type="checkbox" checked={onlyTracked} onChange={e => setOnlyTracked(e.target.checked)} style={{ width: 20, height: 20 }} />
+            <label className="row small check-row">
+              <input type="checkbox" checked={onlyTracked} onChange={e => setOnlyTracked(e.target.checked)} />
               Only stops with a tracked bus
             </label>
+            <label className="row small" style={{ gap: 6 }}>
+              <span>Only route</span>
+              <input className="select-input" style={{ width: '7rem', minHeight: 40 }} value={routeFilter}
+                onChange={e => setRouteFilter(e.target.value)} placeholder="e.g. 106" inputMode="text"
+                autoCapitalize="characters" spellCheck={false} aria-describedby="route-filter-hint" />
+            </label>
+            {route && (
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setRouteFilter('')}>
+                <Icon name="x" size={16} /> Clear route
+              </button>
+            )}
+            <span id="route-filter-hint" className="vh">Exact route number; 106 does not include 106A.</span>
             <button type="button" className="btn btn-sm" onClick={q.refresh} disabled={q.loading}>
               <Icon name="refresh" size={16} /> {q.loading ? 'Updating…' : 'Refresh'}
             </button>
@@ -89,31 +108,37 @@ export default function NearbyPage() {
                     <ul className="list-reset soon-list">
                       {soon.map(b => (
                         <li key={b.vehicleId} className="row" style={{ gap: 12, minHeight: 48 }}>
-                          <span className="route-chip">{b.routeNumber}</span>
+                          <RouteChip upcoming={b} />
                           <span className="grow">
                             <span className="truncate" style={{ display: 'block' }}>{b.stopName}</span>
                             <span className="meta"><span>GPS {ageText(b.lastGpsUpdate, now)}</span></span>
                           </span>
-                          <Eta upcoming={b} />
+                          <Eta upcoming={b} now={now} />
                         </li>
                       ))}
                     </ul>
                   </section>
                 )}
 
-                {shown.length === 0 ? (
-                  <EmptyState icon="bus" title="No tracked buses nearby">
-                    None of the {plural(stands.length, 'stop')} within {distanceText(radius)} has a bus being tracked towards it right now.
+                {route && stands.length === 0 ? (
+                  <EmptyState icon="pin" title={`No stop within ${distanceText(radius)} lists route ${route}`}>
+                    The timetable has no stop served by route {route} this close to you. Try a larger radius, or check the route
+                    number on the Explore map. The nearest stop to you may not serve the route you need.
+                  </EmptyState>
+                ) : shown.length === 0 ? (
+                  <EmptyState icon="bus" title={route ? `No tracked route ${route} bus nearby` : 'No tracked buses nearby'}>
+                    None of the {plural(stands.length, 'stop')} within {distanceText(radius)} has a bus{route ? ` on route ${route}` : ''} that
+                    could be verified as heading towards it right now. That doesn&apos;t mean no bus is coming: many buses in the live
+                    feed can&apos;t be matched to a route or to their position along it.
                   </EmptyState>
                 ) : shown.map(stand => <StandCard key={stand.id} stand={stand} now={now} />)}
 
-                {q.data?.warnings?.length > 0 && (
-                  <details className="data-notes">
-                    <summary>About these estimates</summary>
-                    <p>Times are estimated from live GPS positions and the timetable, or from how long recent buses on the route took. They can change with traffic. A bus without a reliable estimate is listed without a time.</p>
-                    <ul>{q.data.warnings.map(w => <li key={w}>{w}</li>)}</ul>
-                  </details>
-                )}
+                <details className="data-notes">
+                  <summary>About these stops and estimates</summary>
+                  <p>Stop locations and the routes serving them come from DTC&apos;s published timetable (GTFS), which dates from June 2024; stops or routes may have changed since. Distances are straight-line from your location, not walking routes.</p>
+                  <p>Times are estimated from live GPS positions and the timetable, or from how long recent buses on the route took. They can change with traffic and are not traffic-aware. A bus without a reliable estimate is listed without a time, and a time is withdrawn once its GPS fix is more than 2 minutes old.</p>
+                  {q.data?.warnings?.length > 0 && <ul>{q.data.warnings.map(w => <li key={w}>{w}</li>)}</ul>}
+                </details>
               </>
             )}
         </>
@@ -131,7 +156,7 @@ function StandCard({ stand, now }) {
           <h2 id={`stand-${stand.id}`} className="truncate">{stand.name}</h2>
           <span className="meta">
             <span><Icon name="walk" size={14} /> {distanceText(stand.distanceMeters)} · about {Math.max(1, Math.round(stand.walkMinutes))} min walk (straight line)</span>
-            {stand.members.length > 1 && <span>{stand.members.length} stops at this stand</span>}
+            <span>Stop ID {stand.members.map(m => m.id).join(', ')}</span>
           </span>
         </div>
         <FavStopButton stop={stand} />

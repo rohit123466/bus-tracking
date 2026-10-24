@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
+import { toLocation } from '../utils/geo.js';
 
 // One GPS subscription for the whole app, shared by every page that shows the user's position, and
 // stopped when no page needs it. It never prompts on its own: it starts automatically only when the
@@ -27,12 +28,17 @@ function set(patch) {
   listeners.forEach(l => l());
 }
 
-const toLocation = p => ({
-  lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy, timestamp: p.timestamp,
-});
+const INVALID_FIX = 'Your device reported a location that is not valid. Try again in a moment.';
 
+/** False when the reading was unusable; the last good position (if any) is kept. */
 function onPosition(p) {
-  set({ status: 'ready', location: toLocation(p), error: '' });
+  const location = toLocation(p);
+  if (!location) {
+    set({ status: state.location ? 'ready' : 'error', error: INVALID_FIX });
+    return false;
+  }
+  set({ status: 'ready', location, error: '' });
+  return true;
 }
 
 function onError(e) {
@@ -91,15 +97,18 @@ export function locate() {
     consented = true;
     if (!state.location) set({ status: 'locating', error: '' });
     navigator.geolocation.getCurrentPosition(p => {
-      onPosition(p);
+      const ok = onPosition(p);
       startWatch();
-      resolve(state.location);
+      resolve(ok ? state.location : null);
     }, e => { onError(e); resolve(null); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
   });
 }
 
 const subscribe = l => { listeners.add(l); return () => listeners.delete(l); };
 const snapshot = () => state;
+
+/** Current { status, location, error } outside React (tests, non-component code). */
+export const getLocationState = snapshot;
 
 export default function useUserLocation() {
   const current = useSyncExternalStore(subscribe, snapshot, snapshot);

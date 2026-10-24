@@ -1,39 +1,39 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getBusesPassingNear } from '../api/client';
 import WheelchairBadge from '../components/WheelchairBadge';
+import LocationPrompt from '../components/transit/LocationPrompt';
+import useUserLocation from '../hooks/useUserLocation';
 
+// Location comes from the shared GPS store, which only prompts when the user presses
+// "Use my location" (or the browser already granted it); this page never asks on load.
 export default function PassingNearMePage() {
-  const [userLocation, setUserLocation] = useState(null);
+  const gps = useUserLocation();
+  const userLocation = gps.location;
   const [radius, setRadius] = useState(1000);
   const [buses, setBuses] = useState([]);
   const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported by this browser.');
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      (err) => setError(err.message)
-    );
-  }, []);
+  const requestId = useRef(0);
 
   const search = () => {
     if (!userLocation) return;
+    const id = ++requestId.current; // a slower, older answer must not overwrite a newer one
+    setError(null);
     getBusesPassingNear(userLocation.lat, userLocation.lng, radius, 30)
-      .then(setBuses)
-      .catch(() => setError('Failed to load buses passing near you.'));
+      .then(list => { if (id === requestId.current) setBuses(list); })
+      .catch(() => { if (id === requestId.current) setError('Failed to load buses passing near you.'); });
   };
 
+  // Search once a position first becomes available, not on every GPS update.
+  const hasLocation = !!userLocation;
   useEffect(() => {
-    if (userLocation) search();
+    if (hasLocation) search();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userLocation]);
+  }, [hasLocation]);
 
   return (
     <div className="page-panel page-panel-wide">
       <h2>Which Bus Will Pass Near Me</h2>
+      <LocationPrompt gps={gps} why="to find buses passing near you" />
       {error && <div className="banner banner-error" style={{ position: 'static' }}>{error}</div>}
 
       <div className="inline-form">
@@ -85,7 +85,7 @@ export default function PassingNearMePage() {
               <td>{b.destination || '—'}</td>
               <td>{b.stopName}</td>
               <td>{Math.round(b.distanceToStopMeters)} m</td>
-              <td>{b.etaMinutes == null ? 'Unavailable' : `${b.etaMinutes} min`}</td>
+              <td>{b.etaMinutes == null ? 'Unavailable' : `≈ ${b.etaMinutes} min (estimate)`}</td>
             </tr>
           ))}
         </tbody>

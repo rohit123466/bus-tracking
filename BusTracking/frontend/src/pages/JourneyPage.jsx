@@ -20,7 +20,8 @@ import { themePreference } from '../store/theme';
 import { endPin, themeColors } from '../utils/mapIcons';
 import { distanceText, durationText, plural } from '../utils/format';
 import {
-  PREFERENCES, BASIS_TEXT, STATUS_TEXT, busSegments, journeyPoints, parsePlaceParam, placeParam,
+  PREFERENCES, BASIS_TEXT, DURATION_BASIS_TEXT, STATUS_TEXT, busSegments, journeyDurationBasis, journeyPoints,
+  parsePlaceParam, placeParam,
 } from '../utils/journey';
 
 export default function JourneyPage() {
@@ -148,14 +149,16 @@ export default function JourneyPage() {
 
 function JourneyCard({ journey, index, selected, onSelect, from, to }) {
   const buses = busSegments(journey);
+  const basis = journeyDurationBasis(journey);
   const id = `jr-${index}`;
   return (
     <article className="panel jr-card" data-selected={selected}>
       <button type="button" className="jr-summary" aria-expanded={selected} aria-controls={id} onClick={onSelect}>
         <span className="row" style={{ justifyContent: 'space-between' }}>
-          <span className="jr-total">≈ {durationText(journey.totalMinutes)}</span>
+          <span className="jr-total">{basis === 'UNAVAILABLE' ? 'Time unavailable' : `≈ ${durationText(journey.totalMinutes)}`}</span>
           <span className="small muted">+ waiting for {plural(buses.length, 'bus', 'buses')}</span>
         </span>
+        <span className="small muted">{DURATION_BASIS_TEXT[basis]}</span>
         <span className="jr-legs" aria-label={`Buses: ${buses.map(b => b.routeNumber).join(', then ')}`}>
           <Icon name="walk" size={16} />
           {buses.map((b, i) => (
@@ -169,7 +172,7 @@ function JourneyCard({ journey, index, selected, onSelect, from, to }) {
         </span>
         <span className="meta">
           <span>{journey.transfers === 0 ? 'Direct' : plural(journey.transfers, 'change')}</span>
-          <span>Walk {distanceText(journey.walkMeters)}</span>
+          <span>Walk ≈ {distanceText(journey.walkMeters)} (straight line)</span>
           <span>Ride {durationText(journey.rideMinutes)}</span>
         </span>
       </button>

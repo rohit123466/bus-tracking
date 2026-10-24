@@ -18,17 +18,20 @@ const cache = new Map();
 
 const STATE_TEXT = { LIVE: 'live GPS', DELAYED: 'GPS delayed' };
 
-export function busPin(routeCode, freshness = 'LIVE', selected = false) {
+/** `unconfirmed`: the bus's position doesn't fit its route number (routeCheck OFF_ROUTE). */
+export function busPin(routeCode, freshness = 'LIVE', selected = false, unconfirmed = false) {
   const label = String(routeCode ?? '?');
-  const key = `bus|${label}|${freshness}|${selected}`;
+  const key = `bus|${label}|${freshness}|${selected}|${unconfirmed}`;
   let icon = cache.get(key);
   if (!icon) {
-    const width = Math.max(34, label.length * (selected ? 9 : 8) + (selected ? 24 : 18));
+    const text = unconfirmed ? `${label}?` : label;
+    const width = Math.max(34, text.length * (selected ? 9 : 8) + (selected ? 24 : 18));
     const height = selected ? 30 : 24;
-    const cls = `pin-bus${freshness === 'DELAYED' ? ' pin-bus-delayed' : ''}${selected ? ' pin-bus-selected' : ''}`;
+    const cls = `pin-bus${freshness === 'DELAYED' ? ' pin-bus-delayed' : ''}${unconfirmed ? ' pin-bus-unconfirmed' : ''}${selected ? ' pin-bus-selected' : ''}`;
+    const aria = `Bus reported on route ${escapeHtml(label)}${unconfirmed ? ' (route unconfirmed)' : ''}, ${STATE_TEXT[freshness] ?? 'position'}${selected ? ', selected' : ''}`;
     icon = L.divIcon({
       className: 'pin',
-      html: `<span class="${cls}" role="img" aria-label="Bus on route ${escapeHtml(label)}, ${STATE_TEXT[freshness] ?? 'position'}${selected ? ', selected' : ''}">${escapeHtml(label)}</span>`,
+      html: `<span class="${cls}" role="img" aria-label="${aria}">${escapeHtml(text)}</span>`,
       iconSize: [width, height],
       iconAnchor: [width / 2, height / 2],
     });

@@ -2,10 +2,12 @@ package com.dtc.bus_tracker.live;
 
 import java.time.Instant;
 import java.util.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+@Slf4j
 @Service
 public class LiveTransitService {
   /**
@@ -199,17 +201,19 @@ public class LiveTransitService {
       Double distFromShape = distanceFromShape(v);
       boolean offRoute = distFromShape != null && distFromShape > OFF_ROUTE_THRESHOLD_METERS;
 
-      // Dev-mode diagnostic log — does NOT log API keys or secrets.
-      System.out.printf(
-          "[LiveTransit] ACCEPTED vehicle=%s requestedRoute=%s resolvedRouteId=%s tripId=%s"
-              + " direction=%s lat=%.6f lng=%.6f gpsAge=%ds mappingSource=%s distFromShape=%s offRoute=%b%n",
-          v.id(), query.isEmpty() ? "(all)" : query, r.id(), v.tripId(),
-          r.direction().isEmpty() ? v.direction() : r.direction(),
-          v.lat(), v.lng(),
-          java.time.Instant.now().getEpochSecond() - v.timestamp(),
-          src,
-          distFromShape != null ? String.format("%.0fm", distFromShape) : "n/a",
-          offRoute);
+      // Diagnostic log (no API keys or secrets). Debug level: this runs for every vehicle on every
+      // poll of every client, which flooded the hosted instance's log at INFO via System.out.
+      if (log.isDebugEnabled())
+        log.debug(
+            "ACCEPTED vehicle={} requestedRoute={} resolvedRouteId={} tripId={} direction={}"
+                + " lat={} lng={} gpsAge={}s mappingSource={} distFromShape={} offRoute={}",
+            v.id(), query.isEmpty() ? "(all)" : query, r.id(), v.tripId(),
+            r.direction().isEmpty() ? v.direction() : r.direction(),
+            v.lat(), v.lng(),
+            Instant.now().getEpochSecond() - v.timestamp(),
+            src,
+            distFromShape != null ? String.format("%.0fm", distFromShape) : "n/a",
+            offRoute);
 
       out.add(
           new Bus(

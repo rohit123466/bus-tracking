@@ -1,5 +1,5 @@
 import Icon from '../ui/Icon';
-import { Eta } from '../ui/Badges';
+import { Eta, RouteCheckNote, RouteChip } from '../ui/Badges';
 import { sortByEta, arrivalsByRoute } from '../../utils/liveMap';
 import { ageText, distanceText, plural } from '../../utils/format';
 
@@ -21,7 +21,7 @@ export default function ArrivalList({ upcoming, now, limit = 8, onSelect, select
             <Wrapper
               {...(onSelect ? { type: 'button', className: 'row-btn arr-row', onClick: () => onSelect(u), 'aria-current': selectedId === u.vehicleId || undefined } : { className: 'arr-row' })}
             >
-              <span className="route-chip">{u.routeNumber}</span>
+              <RouteChip upcoming={u} />
               <span className="grow">
                 <span className="meta">
                   {u.distanceMeters != null && <span>{distanceText(u.distanceMeters)} away</span>}
@@ -29,10 +29,12 @@ export default function ArrivalList({ upcoming, now, limit = 8, onSelect, select
                   <span title="Age of the bus's last GPS fix">
                     <Icon name="clock" size={13} /> GPS {ageText(u.lastGpsUpdate, now)}
                   </span>
+                  {u.vehicleId && <span>{u.vehicleId}</span>}
                 </span>
                 {u.reason && <span className="small muted arr-reason">{u.reason}</span>}
+                <RouteCheckNote item={u} />
               </span>
-              <Eta upcoming={u} showSource />
+              <Eta upcoming={u} showSource now={now} />
             </Wrapper>
           </li>
         );
