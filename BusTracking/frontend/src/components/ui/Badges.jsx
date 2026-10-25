@@ -1,5 +1,8 @@
 import Icon from './Icon';
-import { busFreshness, etaStatus, ETA_SOURCE_TEXT, OFF_ROUTE_EXPLANATION, routeUnconfirmed } from '../../utils/liveMap';
+import {
+  busFreshness, etaStatus, ETA_SOURCE_TEXT, likelyRouteExplanation, likelyRoutes, OFF_ROUTE_EXPLANATION, routeList,
+  routeUnconfirmed, shownRoute,
+} from '../../utils/liveMap';
 import { ageText, clockText } from '../../utils/format';
 import { toggleRoute, toggleStop, favouriteRoutes, favouriteStops } from '../../store/favourites';
 import { useStore } from '../../hooks/useStores';
@@ -51,21 +54,36 @@ export function Eta({ upcoming, showSource = false, now = Date.now() / 1000 }) {
   );
 }
 
-/** Route number chip; "?" and a dotted outline when the bus's position doesn't fit the route. */
+/**
+ * Route number chip; "?" and a dotted outline when the bus's position doesn't fit the route. Shows
+ * the bus's likely route instead, still marked "?", when its drive fits one current DTC route.
+ */
 export function RouteChip({ upcoming }) {
   const unconfirmed = routeUnconfirmed(upcoming);
+  const shown = shownRoute(upcoming, upcoming.routeNumber);
+  const likely = shown !== upcoming.routeNumber;
   return (
     <span className={`route-chip${unconfirmed ? ' route-chip-unconfirmed' : ''}`}
-      title={unconfirmed ? OFF_ROUTE_EXPLANATION : undefined}
-      aria-label={unconfirmed ? `Route ${upcoming.routeNumber}, unconfirmed` : undefined}>
-      {upcoming.routeNumber}{unconfirmed && <span aria-hidden="true">?</span>}
+      title={likely ? likelyRouteExplanation(upcoming, upcoming.routeNumber) : unconfirmed ? OFF_ROUTE_EXPLANATION : undefined}
+      aria-label={likely ? `Likely route ${shown}, estimated from GPS; feed says ${upcoming.routeNumber}`
+        : unconfirmed ? `Route ${upcoming.routeNumber}, unconfirmed` : undefined}>
+      {shown}{unconfirmed && <span aria-hidden="true">?</span>}
     </span>
   );
 }
 
-/** "Route unconfirmed" marker for a bus or arrival whose position doesn't fit its route number. */
+/**
+ * "Route unconfirmed" marker for a bus or arrival whose position doesn't fit its route number, or
+ * "Likely route …" when its drive fits current DTC routes.
+ */
 export function RouteCheckNote({ item }) {
   if (!routeUnconfirmed(item)) return null;
+  const likely = likelyRoutes(item);
+  if (likely.length) return (
+    <span className="badge badge-unconfirmed" title={likelyRouteExplanation(item, item.routeCode ?? item.routeNumber)}>
+      <Icon name="alert" size={13} /> Likely route {routeList(likely)} (from GPS)
+    </span>
+  );
   return (
     <span className="badge badge-unconfirmed" title={OFF_ROUTE_EXPLANATION}>
       <Icon name="alert" size={13} /> Route unconfirmed

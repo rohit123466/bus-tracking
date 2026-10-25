@@ -158,12 +158,38 @@ export const ETA_SOURCE_TEXT = {
  */
 export const ROUTE_CHECK_TEXT = {
   TRIP_MATCH: 'Route confirmed by the timetable trip',
+  ON_OFFICIAL_ROUTE: 'On this route’s current DTC path',
   ON_ROUTE: 'On this route’s timetable path',
   OFF_ROUTE: 'Route number unconfirmed',
   NO_STOPS: 'Route can’t be checked (no timetable stops)',
 };
 
 export const routeUnconfirmed = bus => bus?.routeCheck === 'OFF_ROUTE';
+
+/**
+ * Route numbers an unconfirmed bus is probably running (`likelyRoutes` from the backend): buses
+ * with its feed route ID were seen driving DTC's current path for each, and it is on that path
+ * now. Worked out from GPS, never reported by the feed.
+ */
+export const likelyRoutes = bus =>
+  routeUnconfirmed(bus) && Array.isArray(bus?.likelyRoutes) ? bus.likelyRoutes : [];
+
+/** The number to label a bus with: its one likely route when the feed's number doesn't fit. */
+export function shownRoute(bus, feedNumber = bus?.routeCode) {
+  const likely = likelyRoutes(bus);
+  return likely.length === 1 ? likely[0] : feedNumber;
+}
+
+/** "427", "133 or 119", "133, 119 or 208". */
+export const routeList = numbers =>
+  numbers.length <= 1 ? (numbers[0] ?? '') : `${numbers.slice(0, -1).join(', ')} or ${numbers[numbers.length - 1]}`;
+
+/** Why a likely route is shown instead of (or next to) the feed's number. */
+export function likelyRouteExplanation(bus, feedNumber = bus?.routeCode) {
+  const likely = likelyRoutes(bus);
+  if (!likely.length) return '';
+  return `The live feed calls this bus route ${feedNumber}, but it is far from that route. Buses with the same feed route ID were seen driving DTC’s current path for route ${routeList(likely)}, and this bus is on that path now. This is worked out from GPS, not reported by the feed.`;
+}
 
 /** Longer explanation for a bus whose route number does not fit its position. */
 export const OFF_ROUTE_EXPLANATION =

@@ -401,6 +401,67 @@ class RegionServiceTest {
     assertEquals(List.of("500"), stops.stops().get(0).routeNumbers());
   }
 
+  /** Rebuilds {@link #regions} with an official route list and a route identifier over it. */
+  OfficialRoutes withOfficialRoutes() {
+    var official = new OfficialRoutes();
+    var identifier = new RouteIdentifier(learner, official);
+    regions = new RegionService(index, transit, snapshot, learner, official, identifier);
+    return official;
+  }
+
+  @Test
+  void busOnTheCurrentOfficialPathOfItsNumberIsConfirmedThoughOffTheTimetable() {
+    var official = withOfficialRoutes();
+    // DTC now runs 100 straight up 77.20, ~7 km east of its 2024 timetable stops.
+    official.add("100", "UP", List.of(
+        new TransitIndex.Point(28.55, 77.20, 1), new TransitIndex.Point(28.70, 77.20, 2)));
+    feed(vehicle("east", "rA", "rA_23_98", new double[] {MID_A[0], 77.20}, null, 0),
+        vehicle("lost", "rA", "rA_23_97", new double[] {MID_A[0], 77.30}, null, 0));
+    var byId = busesById();
+    assertEquals(RegionService.CHECK_ON_OFFICIAL, byId.get("east").routeCheck());
+    assertTrue(byId.get("east").likelyRoutes().isEmpty());
+    assertEquals(RegionService.CHECK_OFF_ROUTE, byId.get("lost").routeCheck());
+  }
+
+  @Test
+  void staleRouteNumberGetsTheOfficialRouteItsDriveFits() {
+    var official = withOfficialRoutes();
+    learnRoute500(); // 500's buses drive 4.4 km north along 77.10; its timetable says Saket only
+    official.add("427", "UP", OfficialRoutesTest.north(77.10, 28.70, 28.74));
+    official.add("990", "UP", OfficialRoutesTest.north(77.30, 28.70, 28.74));
+    var identifier = new RouteIdentifier(learner, official);
+    identifier.refresh();
+    regions = new RegionService(index, transit, snapshot, learner, official, identifier);
+
+    feed(vehicle("live500", "rL", "rL_23_7", new double[] {28.715, 77.10}, null, 10, 0f),
+        vehicle("away500", "rL", "rL_23_8", new double[] {28.715, 77.20}, null, 10, 0f));
+    var byId = busesById();
+    var bus = byId.get("live500");
+    assertEquals("500", bus.routeCode()); // the feed's number is still reported as such
+    assertEquals(RegionService.CHECK_OFF_ROUTE, bus.routeCheck());
+    assertEquals(List.of("427"), bus.likelyRoutes());
+    // Same route ID, but this bus is not on 427's path right now: no guess for it.
+    assertTrue(byId.get("away500").likelyRoutes().isEmpty());
+
+    // Searching for 427 finds the bus by its likely route.
+    var found = regions.buses(RegionService.Filter.ANY, "427", false);
+    assertEquals(List.of("live500"), found.buses().stream().map(RegionService.RegionalBus::vehicleId).toList());
+    assertTrue(found.warnings().stream().noneMatch(w -> w.startsWith("No GTFS public-route mapping")));
+    assertTrue(found.warnings().stream().anyMatch(w -> w.contains("likely route")));
+    // Arrivals carry it too.
+    var up = regions.upcoming("L2", Set.of("500"), new ArrayList<>());
+    assertEquals(List.of("427"), up.get(0).likelyRoutes());
+  }
+
+  @Test
+  void officialRouteStopsMakeTheNumberEligible() {
+    var official = withOfficialRoutes();
+    assertFalse(regions.eligibleNumbers(RegionService.Filter.NORTH_WEST).contains("200"));
+    official.add("200", "UP", OfficialRoutesTest.north(77.05, 28.70, 28.74)); // now runs in Rohini
+    regions = new RegionService(index, transit, snapshot, learner, official, new RouteIdentifier(learner, official));
+    assertTrue(regions.eligibleNumbers(RegionService.Filter.NORTH_WEST).contains("200"));
+  }
+
   @Test
   void invalidRegionIsRejected() {
     assertThrows(ResponseStatusException.class, () -> RegionService.Filter.parse("EAST"));

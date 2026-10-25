@@ -6,6 +6,7 @@ import { visibleBuses, distance } from '../src/utils/navigation.js';
 import { isValidCoordinate, inDelhiNcr, toLocation, COARSE_ACCURACY_M } from '../src/utils/geo.js';
 import {
   etaStatus, filterStandsByRoute, routeUnconfirmed, ROUTE_CHECK_TEXT, approachingBuses, groupStands,
+  likelyRoutes, likelyRouteExplanation, routeList, shownRoute,
 } from '../src/utils/liveMap.js';
 import { journeyDurationBasis } from '../src/utils/journey.js';
 import { translate, DICTIONARIES } from '../src/i18n/index.js';
@@ -100,6 +101,30 @@ test('only OFF_ROUTE marks a route number unconfirmed; a missing field is not tr
   assert.ok(routeUnconfirmed({ routeCheck: 'OFF_ROUTE' }));
   for (const c of ['TRIP_MATCH', 'ON_ROUTE', 'NO_STOPS', undefined]) assert.ok(!routeUnconfirmed({ routeCheck: c }));
   assert.equal(ROUTE_CHECK_TEXT[undefined], undefined, 'older servers show "not checked", not a confirmation');
+  assert.ok(!routeUnconfirmed({ routeCheck: 'ON_OFFICIAL_ROUTE' }));
+  assert.ok(ROUTE_CHECK_TEXT.ON_OFFICIAL_ROUTE);
+});
+
+test('an unconfirmed bus is labelled with its single likely route; several stay listed, none keep the feed number', () => {
+  const stale = bus('B1', '836LNKSTL', { routeCheck: 'OFF_ROUTE', likelyRoutes: ['427'] });
+  assert.equal(shownRoute(stale), '427');
+  assert.match(likelyRouteExplanation(stale), /calls this bus route 836LNKSTL.*route 427.*not reported by the feed/);
+  const two = bus('B2', '113', { routeCheck: 'OFF_ROUTE', likelyRoutes: ['144STL', '148STL'] });
+  assert.equal(shownRoute(two), '113');
+  assert.equal(routeList(likelyRoutes(two)), '144STL or 148STL');
+  assert.equal(routeList(['133', '119', '208']), '133, 119 or 208');
+  // Only an OFF_ROUTE bus gets a likely route, whatever the field says.
+  assert.equal(shownRoute(bus('B3', '106', { routeCheck: 'ON_OFFICIAL_ROUTE', likelyRoutes: ['427'] })), '106');
+  assert.equal(shownRoute(bus('B4', '106')), '106');
+});
+
+test('selecting a route also shows buses whose likely route it is', () => {
+  const buses = [
+    bus('B1', '836LNKSTL', { routeCheck: 'OFF_ROUTE', likelyRoutes: ['427'] }),
+    bus('B2', '427'),
+    bus('B3', '4270'),
+  ];
+  assert.deepEqual(visibleBuses(buses, '427', NOW).map(b => b.vehicleId).sort(), ['B1', 'B2']);
 });
 
 // ── User location ───────────────────────────────────────────────────────────

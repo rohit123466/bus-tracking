@@ -32,6 +32,10 @@ function fixtures({ patterns404 = false, journey404 = false } = {}) {
       buses: url.searchParams.get('routeNumber') === '106'
         ? [bus('R106', '106', 5, { routeCheck: 'ON_ROUTE' }), bus('R106A', '106A', 5), bus('R1060', '1060', 5), bus('R160', '160', 5),
           bus('R106', '106', 9, { busLatitude: 28.71 })]
+        // Route 427: one bus by its feed number on DTC's current path, one whose feed number is stale.
+        : url.searchParams.get('routeNumber') === '427'
+        ? [bus('R427', '427', 5, { routeCheck: 'ON_OFFICIAL_ROUTE' }),
+          bus('STALE427', '836LNKSTL', 6, { routeCheck: 'OFF_ROUTE', likelyRoutes: ['427'], nextStopName: null, nextStopEtaMinutes: null })]
         : [bus('LIVE1', '534', 5, { routeCheck: 'ON_ROUTE' }), bus('DELAYED1', '534', 70, { routeCheck: 'TRIP_MATCH' }),
           bus('STALE1', '534', 400), bus('OFF1', '534', 8, { routeCheck: 'OFF_ROUTE', nextStopName: null, nextStopEtaMinutes: null })],
       warnings: [], fetchedAt: now(), feedAvailable: true, region: 'ANY', eligibleRouteCount: 2, excludedByRegion: 0, excludedOutsideArea: 0,
@@ -157,6 +161,20 @@ try {
     assert.equal(await page.getByRole('button', { name: /OFF1/ }).count(), 0);
     await page.getByText(/1 bus with an unconfirmed route is hidden/).waitFor();
     await page.getByRole('checkbox', { name: /Hide buses whose route number is unconfirmed/ }).uncheck();
+  });
+  await check('stale feed number: bus listed and labelled by its likely route, with the feed number kept visible', async () => {
+    await page.goto(`${BASE}/?route=427`);
+    await page.getByText(/^Live feed · 2 buses on route 427/).waitFor();
+    const items = await page.locator('section[aria-labelledby="rt-buses"] li').allInnerTexts();
+    assert.match(items.join('\n'), /STALE427[\s\S]*Likely route 427 \(from GPS\)/);
+    await page.getByRole('button', { name: /STALE427/ }).click();
+    await page.getByRole('heading', { name: /Likely route 427/ }).waitFor();
+    await page.getByText('feed says 836LNKSTL').waitFor();
+    await page.getByText(/The live feed calls this bus route 836LNKSTL/).waitFor();
+    await page.getByRole('img', { name: /Bus likely on route 427 \(estimated from GPS\)/ }).waitFor();
+    await page.goBack();
+    await page.getByRole('button', { name: /R427/ }).click();
+    await page.getByText('On this route’s current DTC path').waitFor();
   });
   await check('route 106: look-alike routes and a duplicate vehicle never reach the map or list', async () => {
     await page.goto(`${BASE}/?route=106`);
