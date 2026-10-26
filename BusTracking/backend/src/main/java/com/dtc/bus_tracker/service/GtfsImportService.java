@@ -11,12 +11,16 @@ import com.dtc.bus_tracker.repository.TripRepository;
 import com.opencsv.CSVReader;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -50,16 +54,23 @@ public class GtfsImportService {
     private double centerLng;
     @Value("${gtfs.import.radius-degrees:0.16}")
     private double radiusDegrees;
+    /** Re-import when the bundled GTFS.zip no longer matches what the database was seeded from. */
+    @Value("${gtfs.import.reseed-on-change:true}")
+    private boolean reseedOnChange;
+
+    private final JdbcTemplate jdbc;
 
     public GtfsImportService(
             RouteRepository routeRepository,
             StopRepository stopRepository,
             TripRepository tripRepository,
-            StopTimeRepository stopTimeRepository) {
+            StopTimeRepository stopTimeRepository,
+            JdbcTemplate jdbc) {
         this.routeRepository = routeRepository;
         this.stopRepository = stopRepository;
         this.tripRepository = tripRepository;
         this.stopTimeRepository = stopTimeRepository;
+        this.jdbc = jdbc;
     }
 
     private record StopRow(String stopId, String name, double lat, double lon, boolean wheelchairBoarding) {}
@@ -77,12 +88,21 @@ public class GtfsImportService {
     private static final String LFS_POINTER_MAGIC = "version https://git-lfs.github.com/spec/v1";
 
     public void importAll() throws Exception {
-        if (routeRepository.count() > 0) {
-            System.out.println("GTFS already seeded, skipping import.");
-            return;
-        }
-
         assertGtfsZipIsResolved();
+        String fingerprint = fingerprint();
+        String seeded = seededFingerprint();
+        if (routeRepository.count() > 0) {
+            if (fingerprint.equals(seeded)) {
+                System.out.println("GTFS already seeded, skipping import.");
+                return;
+            }
+            if (!reseedOnChange) {
+                System.out.println("Seeded GTFS differs from the bundled GTFS.zip; keeping it because"
+                        + " gtfs.import.reseed-on-change=false.");
+                return;
+            }
+            if (!clearImportedFeed()) return;
+        }
 
         boolean filtered = radiusDegrees > 0;
         System.out.println(filtered
@@ -117,6 +137,60 @@ public class GtfsImportService {
 
         // 7. stop_times.txt (pass 2) -> actual insert, in-memory lookups only
         importStopTimes(tripByTripId, stopByStopId);
+
+        // Recorded last, so an interrupted import is cleared and redone on the next start.
+        jdbc.update("DELETE FROM gtfs_import_state");
+        jdbc.update("INSERT INTO gtfs_import_state (fingerprint) VALUES (?)", fingerprint);
+    }
+
+    /**
+     * Identifies what was imported: the feed's routes, stops and trips plus the import area, so
+     * replacing GTFS.zip (or changing the area) triggers a fresh import instead of keeping the old
+     * feed's routes forever.
+     */
+    private String fingerprint() throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        for (String file : List.of("routes.txt", "stops.txt", "trips.txt"))
+            withZipEntry(file, zis -> {
+                byte[] buffer = new byte[64 * 1024];
+                for (int n; (n = zis.read(buffer)) > 0; ) digest.update(buffer, 0, n);
+            });
+        String area = radiusDegrees > 0 ? centerLat + "," + centerLng + "," + radiusDegrees : "all";
+        digest.update(area.getBytes(StandardCharsets.UTF_8));
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private String seededFingerprint() {
+        jdbc.execute("CREATE TABLE IF NOT EXISTS gtfs_import_state (fingerprint VARCHAR(64) NOT NULL)");
+        List<String> rows = jdbc.queryForList("SELECT fingerprint FROM gtfs_import_state", String.class);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /**
+     * Deletes the previously imported feed, keeping the ticketing demo route and its stops. Refuses
+     * (returning false) when tickets were sold on an imported trip, since those rows reference it.
+     */
+    private boolean clearImportedFeed() {
+        String imported = "SELECT id FROM routes WHERE route_code IS NULL OR route_code <> '"
+                + TicketingDemoDataService.ROUTE_CODE + "'";
+        String importedTrips = "SELECT id FROM trips WHERE route_id IN (" + imported + ")";
+        Integer tickets = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM tickets WHERE trip_id IN (" + importedTrips + ")", Integer.class);
+        if (tickets != null && tickets > 0) {
+            System.out.println("Bundled GTFS.zip changed, but " + tickets + " tickets reference the"
+                    + " imported trips; keeping the seeded feed.");
+            return false;
+        }
+        System.out.println("Bundled GTFS.zip changed; removing the previously imported feed.");
+        jdbc.update("UPDATE buses SET route_id = NULL WHERE route_id IN (" + imported + ")");
+        jdbc.update("DELETE FROM stop_times WHERE trip_id IN (" + importedTrips + ")");
+        jdbc.update("DELETE FROM trips WHERE route_id IN (" + imported + ")");
+        jdbc.update("DELETE FROM route_stop WHERE route_id IN (" + imported + ")");
+        jdbc.update("DELETE FROM routes WHERE id IN (" + imported + ")");
+        jdbc.update("DELETE FROM route_stop WHERE stop_id IN (SELECT id FROM stops WHERE stop_id NOT LIKE 'DEMO-%')");
+        jdbc.update("DELETE FROM stops WHERE stop_id NOT LIKE 'DEMO-%'"
+                + " AND id NOT IN (SELECT stop_id FROM stop_times)");
+        return true;
     }
 
     private void assertGtfsZipIsResolved() throws Exception {

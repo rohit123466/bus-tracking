@@ -131,7 +131,7 @@ public class TransitIndex {
           String shortName = r.getOrDefault("route_short_name", "").trim();
           String name = r.getOrDefault("route_long_name", "").trim();
           String number = publicNumber(shortName, name);
-          String direction = name.endsWith("DOWN") ? "DOWN" : name.endsWith("UP") ? "UP" : "";
+          String direction = direction(name.isEmpty() ? shortName : name);
           routes.put(
               r.get("route_id"),
               new Route(r.get("route_id"), number, name, direction, shortName.isEmpty()));
@@ -263,11 +263,24 @@ public class TransitIndex {
     }
   }
 
+  /** Direction suffix of a DTC route name, with an optional variant number: 116AUP2, 534DOWN. */
+  private static final String DIRECTION_SUFFIX = "(UP|DOWN)[0-9]*$";
+
   public static String publicNumber(String shortName, String longName) {
-    if (shortName != null && !shortName.isBlank()) return shortName.trim().toUpperCase(Locale.ROOT);
+    if (shortName != null && !shortName.isBlank()) {
+      // The 2025 DTC/DoT feed repeats the direction in route_short_name: 102ADOWN, D-12UP, 116AUP2.
+      String name = shortName.trim().toUpperCase(Locale.ROOT);
+      String number = name.replaceFirst(DIRECTION_SUFFIX, "");
+      return number.isEmpty() ? name : number;
+    }
     // Feed-specific fallback: strip only explicit terminal direction suffixes; 534E stays 534E.
     String name = longName == null ? "" : longName.trim().toUpperCase(Locale.ROOT);
-    return name.matches("[0-9][A-Z0-9/-]*(UP|DOWN)") ? name.replaceFirst("(UP|DOWN)$", "") : null;
+    return name.matches("[0-9][A-Z0-9/-]*" + DIRECTION_SUFFIX) ? name.replaceFirst(DIRECTION_SUFFIX, "") : null;
+  }
+
+  public static String direction(String routeName) {
+    String name = routeName == null ? "" : routeName.trim().toUpperCase(Locale.ROOT);
+    return name.matches(".*DOWN[0-9]*") ? "DOWN" : name.matches(".*UP[0-9]*") ? "UP" : "";
   }
 
   public static int seconds(String raw) {

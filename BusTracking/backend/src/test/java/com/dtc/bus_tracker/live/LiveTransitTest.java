@@ -95,6 +95,18 @@ class LiveTransitTest {
   }
 
   @Test
+  void shortNamesWithDirectionSuffixKeepOnlyTheRouteNumber() {
+    assertEquals("102A", TransitIndex.publicNumber("102ADOWN", "102ADOWN"));
+    assertEquals("116A", TransitIndex.publicNumber("116AUP2", "116AUP2"));
+    assertEquals("D-12", TransitIndex.publicNumber("D-12UP", "D-12UP"));
+    assertEquals("12(NS)", TransitIndex.publicNumber("12(NS)UP", "12(NS)UP"));
+    assertEquals("GAZIABAD TO NOIDA", TransitIndex.publicNumber("Gaziabad To Noida", ""));
+    assertEquals("DOWN", TransitIndex.direction("116ADOWN2"));
+    assertEquals("UP", TransitIndex.direction("D-12UP"));
+    assertEquals("", TransitIndex.direction("CIRCULAR"));
+  }
+
+  @Test
   void exactPublicNumberNeverMatchesInternalRouteId() {
     feed(
         vehicle("a", "1824", "t", now, 28.6),
