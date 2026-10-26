@@ -1,8 +1,9 @@
 # Render Blueprint for the DTC Bus Tracker (lives at the repo root; the app is in BusTracking/).
 # Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
 #
-# After the first deploy, fill in the three `sync: false` values marked below
-# (DTC_API_KEY, CORS_ALLOWED_ORIGINS, VITE_API_URL) - see BusTracking/DEPLOY.md.
+# The database is Neon Postgres (https://neon.tech), not a Render database.
+# On the first deploy, fill in the `sync: false` values marked below (Neon PG* vars,
+# DTC_API_KEY, CORS_ALLOWED_ORIGINS, VITE_API_URL) - see BusTracking/DEPLOY.md.
 
 services:
   # Spring Boot API + WebSocket
@@ -16,27 +17,16 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
-      # application-prod.properties reads the standard PG* vars.
+      # Neon Postgres: copy these from the Neon dashboard (Connect -> Parameters only).
+      # Use the direct host (ep-...neon.tech), not the -pooler one; Hikari already pools.
       - key: PGHOST
-        fromDatabase:
-          name: bus-tracker-db
-          property: host
-      - key: PGPORT
-        fromDatabase:
-          name: bus-tracker-db
-          property: port
+        sync: false
       - key: PGDATABASE
-        fromDatabase:
-          name: bus-tracker-db
-          property: database
+        sync: false
       - key: PGUSER
-        fromDatabase:
-          name: bus-tracker-db
-          property: user
+        sync: false
       - key: PGPASSWORD
-        fromDatabase:
-          name: bus-tracker-db
-          property: password
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -87,8 +77,3 @@ services:
     maxmemoryPolicy: allkeys-lru
     ipAllowList: []
 
-databases:
-  - name: bus-tracker-db
-    plan: free
-    databaseName: dtc_bus_tracker
-    user: dtc_user

@@ -38,6 +38,8 @@ services:
       PGDATABASE: dtc_bus_tracker
       PGUSER: dtc_user
       PGPASSWORD: ${POSTGRES_PASSWORD:-dtc_pass}
+      # The local Postgres container has no TLS (Neon in prod requires it).
+      PGSSLMODE: disable
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}

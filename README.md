@@ -68,7 +68,8 @@ Set as environment variables. The `prod` profile **refuses to start** if the sec
 | `JWT_SECRET` | yes, 32+ bytes | dev-only value | Signs admin login tokens |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | password yes, 12+ chars | `admin` / `admin123` | Seeded admin account (first boot only) |
 | `CORS_ALLOWED_ORIGINS` | yes, no wildcards | `localhost:3000,5173` | Frontend origin(s) |
-| `PGHOST` `PGPORT` `PGDATABASE` `PGUSER` `PGPASSWORD` | yes | local Postgres | Database |
+| `PGHOST` `PGPORT` `PGDATABASE` `PGUSER` `PGPASSWORD` | yes (`PGPORT` defaults to 5432) | local Postgres | Database (Neon in prod) |
+| `PGSSLMODE` | no | prod: `require` | Postgres TLS mode; `disable` for a local Postgres without TLS |
 | `REDIS_URL` | yes | `localhost:6379` | Live position store |
 | `GTFS_IMPORT_RADIUS_DEGREES` | no | `0.16` (prod: `0` = all Delhi) | Area of the GTFS import |
 | `BUS_HISTORY_RETENTION_HOURS` | no | `24` | Journey Replay history kept; `0` keeps everything |
@@ -100,7 +101,7 @@ Every push and pull request runs the same checks in GitHub Actions ([ci.yml](.gi
 
 ## Deployment
 
-Render, from [render.yaml](render.yaml): see [BusTracking/DEPLOY.md](BusTracking/DEPLOY.md).
+Render (API, frontend, Redis) from [render.yaml](render.yaml), with a [Neon](https://neon.tech) Postgres database: see [BusTracking/DEPLOY.md](BusTracking/DEPLOY.md).
 
 ## More documentation
 
