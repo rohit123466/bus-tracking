@@ -44,7 +44,9 @@ export function visibleBuses(buses, routeNumber, now = Date.now() / 1000) {
   for (const b of buses ?? []) {
     const ok = b && b.vehicleId &&
       // Exact route match (case-insensitive), or no route selected.
-      (!selectedRoute || (b.routeCode != null && b.routeCode.toString().toUpperCase() === selectedRoute)) &&
+      (!selectedRoute || (b.routeCode != null && b.routeCode.toString().toUpperCase() === selectedRoute) ||
+        // A bus whose feed number is stale but whose drive fits the selected route's DTC path.
+        (b.likelyRoutes ?? []).some(n => String(n).toUpperCase() === selectedRoute)) &&
       inDelhiNcr(b.busLatitude, b.busLongitude) &&
       b.lastUpdatedEpochSeconds > 0 &&
       now - b.lastUpdatedEpochSeconds <= 120 &&

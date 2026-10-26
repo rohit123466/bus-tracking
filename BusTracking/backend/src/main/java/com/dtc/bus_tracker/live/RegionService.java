@@ -2,6 +2,7 @@ package com.dtc.bus_tracker.live;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -66,6 +67,8 @@ public class RegionService {
    */
   /** The feed's trip_id is in the timetable and belongs to this route. */
   public static final String CHECK_TRIP = "TRIP_MATCH";
+  /** The bus is on DTC's current official path for the route number ({@link OfficialRoutes}). */
+  public static final String CHECK_ON_OFFICIAL = "ON_OFFICIAL_ROUTE";
   /** The bus is within {@link #ROUTE_CHECK_METERS} of the route's timetable stop path. */
   public static final String CHECK_ON_ROUTE = "ON_ROUTE";
   /** Farther than that from every stop pattern: depot, diversion or an outdated route_id. */
@@ -97,7 +100,9 @@ public class RegionService {
       Double nextStopEtaMinutes,
       String nextStopEtaBasis,
       /** One of the CHECK_* values: whether the GPS fix fits the route number shown. */
-      String routeCheck) {}
+      String routeCheck,
+      /** See {@link #likelyRoutes}; empty unless the route number shown is OFF_ROUTE. */
+      List<String> likelyRoutes) {}
 
   public record RegionalBuses(
       List<RegionalBus> buses,
@@ -132,7 +137,9 @@ public class RegionService {
       /** Distance still to travel to the stop along the route's stops; null when unknown. */
       Double distanceMeters,
       /** One of the CHECK_* values: whether the GPS fix fits the route number shown. */
-      String routeCheck) {}
+      String routeCheck,
+      /** See {@link #likelyRoutes}; empty unless the route number shown is OFF_ROUTE. */
+      List<String> likelyRoutes) {}
 
   public record RegionalStop(
       String id,
@@ -157,21 +164,36 @@ public class RegionService {
   private final LiveTransitService transit;
   private final RealtimeSnapshot live;
   private final RouteLearner learner;
+  private final OfficialRoutes official;
+  private final RouteIdentifier identifier;
 
+  /** Without DTC's official route list: checks use the GTFS timetable only. */
   public RegionService(
       TransitIndex index, LiveTransitService transit, RealtimeSnapshot live, RouteLearner learner) {
+    this(index, transit, live, learner, new OfficialRoutes(), null);
+  }
+
+  @Autowired
+  public RegionService(
+      TransitIndex index, LiveTransitService transit, RealtimeSnapshot live, RouteLearner learner,
+      OfficialRoutes official, RouteIdentifier identifier) {
     this.index = index;
     this.transit = transit;
     this.live = live;
     this.learner = learner;
+    this.official = official;
+    this.identifier = identifier == null ? new RouteIdentifier(learner, official) : identifier;
   }
 
   /**
    * Public route number -> union of regions across every GTFS route that carries it, from its
-   * static GTFS stops and from the stops on its learned (actually driven) path.
+   * static GTFS stops, from the stops on its learned (actually driven) path, and from its stops in
+   * DTC's current official route list.
    */
   Map<String, EnumSet<TransitIndex.Region>> regionsByNumber() {
     Map<String, EnumSet<TransitIndex.Region>> out = new HashMap<>();
+    officialRegions().forEach((n, r) ->
+        out.computeIfAbsent(n, k -> EnumSet.noneOf(TransitIndex.Region.class)).addAll(r));
     for (var e : index.routeRegions.entrySet()) {
       var route = index.routes.get(e.getKey());
       if (route == null || route.number() == null) continue;
@@ -187,6 +209,41 @@ public class RegionService {
             .addAll(here);
     }
     return out;
+  }
+
+  // Both from static data, so built once.
+  private volatile Map<String, String> gtfsNumberByKey;
+  private volatile Map<String, EnumSet<TransitIndex.Region>> officialRegions;
+
+  /**
+   * The number as the GTFS spells it when it has the same route ("408 STL" -> "408STL"), so an
+   * official number can be selected and searched like any other; otherwise DTC's spelling.
+   */
+  String canonical(String officialNumber) {
+    var byKey = gtfsNumberByKey;
+    if (byKey == null) {
+      Map<String, String> built = new HashMap<>();
+      for (var r : index.routes.values())
+        if (r.number() != null) built.putIfAbsent(OfficialRoutes.key(r.number()), r.number());
+      gtfsNumberByKey = byKey = built;
+    }
+    return byKey.getOrDefault(OfficialRoutes.key(officialNumber), officialNumber);
+  }
+
+  private Map<String, EnumSet<TransitIndex.Region>> officialRegions() {
+    var built = officialRegions;
+    if (built == null) {
+      built = new HashMap<>();
+      for (var p : official.paths())
+        for (var pt : p.points()) {
+          var here = index.regionsAt(pt.lat(), pt.lng());
+          if (!here.isEmpty())
+            built.computeIfAbsent(canonical(p.number()), k -> EnumSet.noneOf(TransitIndex.Region.class))
+                .addAll(here);
+        }
+      officialRegions = built;
+    }
+    return built;
   }
 
   private record CachedRegions(RouteLearner.LearnedRoute path, EnumSet<TransitIndex.Region> regions) {}
@@ -291,16 +348,42 @@ public class RegionService {
    * kept wherever in Delhi it is.
    */
   public RegionalBuses buses(Filter filter, String routeNumber, boolean insideAreaOnly) {
-    var all = transit.buses(routeNumber == null ? "" : routeNumber);
+    String requested = routeNumber == null ? "" : routeNumber.trim();
+    var all = transit.buses(requested);
     var byNumber = regionsByNumber();
     Set<String> eligible = eligibleNumbers(filter);
     Map<String, RealtimeSnapshot.Vehicle> vehicles = new HashMap<>();
     for (var v : transit.liveVehicles()) vehicles.put(v.id(), v);
 
+    // A search for a number also finds buses whose feed number is stale but whose drive matches
+    // that number's current official path.
+    List<LiveTransitService.Bus> candidates = new ArrayList<>(all.buses());
+    boolean likelyAdded = false;
+    if (!requested.isEmpty() && !official.isEmpty()) {
+      Set<String> listed = new HashSet<>();
+      for (var b : candidates) listed.add(b.vehicleId());
+      String key = OfficialRoutes.key(requested);
+      for (var b : transit.buses("").buses()) {
+        if (listed.contains(b.vehicleId())) continue;
+        var v = vehicles.get(b.vehicleId());
+        var route = index.routes.get(b.routeId());
+        if (v == null || route == null) continue;
+        if (likelyRoutes(v, route, routeCheck(v, route)).stream()
+            .anyMatch(n -> OfficialRoutes.key(n).equals(key))) {
+          candidates.add(b);
+          likelyAdded = true;
+        }
+      }
+    }
+
     List<RegionalBus> out = new ArrayList<>();
     int excluded = 0, outsideArea = 0;
-    for (var b : all.buses()) {
-      if (!eligible.contains(b.routeCode())) {
+    for (var b : candidates) {
+      var vehicle = vehicles.get(b.vehicleId());
+      var route = index.routes.get(b.routeId());
+      String check = vehicle == null ? CHECK_NO_STOPS : routeCheck(vehicle, route);
+      var likely = vehicle == null ? List.<String>of() : likelyRoutes(vehicle, route, check);
+      if (!eligible.contains(b.routeCode()) && likely.stream().noneMatch(eligible::contains)) {
         excluded++;
         continue;
       }
@@ -308,11 +391,12 @@ public class RegionService {
         outsideArea++;
         continue;
       }
-      var regions =
-          byNumber.getOrDefault(b.routeCode(), EnumSet.noneOf(TransitIndex.Region.class)).stream()
-              .map(Enum::name)
-              .toList();
-      var vehicle = vehicles.get(b.vehicleId());
+      EnumSet<TransitIndex.Region> here = EnumSet.noneOf(TransitIndex.Region.class);
+      for (var n : concat(b.routeCode(), likely)) {
+        var r = byNumber.get(n);
+        if (r != null) here.addAll(r);
+      }
+      var regions = here.stream().map(Enum::name).toList();
       var next = nextStop(vehicle);
       out.add(
           new RegionalBus(
@@ -325,15 +409,23 @@ public class RegionService {
               next == null ? null : next.distance(),
               next == null ? null : next.etaMinutes(),
               next == null || next.etaMinutes() == null ? null : next.basis(),
-              vehicle == null ? CHECK_NO_STOPS : routeCheck(vehicle, index.routes.get(b.routeId()))));
+              check, likely));
     }
     List<String> warnings = new ArrayList<>(all.warnings());
+    // transit.buses() says no bus carries the number; some do, by their likely route.
+    if (likelyAdded) warnings.removeIf(w -> w.startsWith("No GTFS public-route mapping"));
     long offRoute = out.stream().filter(b -> CHECK_OFF_ROUTE.equals(b.routeCheck())).count();
     if (offRoute > 0)
       warnings.add(
           offRoute + " shown buses are more than " + (int) ROUTE_CHECK_METERS + " m from every"
-              + " timetable stop of the route number the feed gives them, so that number is"
+              + " stop of the route number the feed gives them, so that number is"
               + " unconfirmed (depot, diversion, or an outdated route mapping).");
+    long likelyShown = out.stream().filter(b -> !b.likelyRoutes().isEmpty()).count();
+    if (likelyShown > 0)
+      warnings.add(
+          likelyShown + " of those have a likely route: the path their route's buses were seen"
+              + " driving lies on that number's path in DTC's current route list. This is an"
+              + " estimate from GPS, not a number the feed reports.");
     long unknownTrips = out.stream().filter(b -> !index.trips.containsKey(b.tripId())).count();
     if (unknownTrips > 0)
       warnings.add(
@@ -433,17 +525,27 @@ public class RegionService {
     });
   }
 
+  private static List<String> concat(String first, List<String> rest) {
+    List<String> out = new ArrayList<>(rest.size() + 1);
+    out.add(first);
+    out.addAll(rest);
+    return out;
+  }
+
   /**
    * One of the CHECK_* values for the route number shown for {@code v}. Only says whether the GPS
-   * fix is consistent with that route's timetable stops; a nearby different route is never
-   * substituted, because proximity alone does not identify the route a bus is running.
+   * fix is consistent with that route's official path or timetable stops; a nearby different
+   * route is never substituted here, because one position does not identify the route a bus is
+   * running (see {@link #likelyRoutes} for that).
    */
   String routeCheck(RealtimeSnapshot.Vehicle v, TransitIndex.Route route) {
     if (route == null) return CHECK_NO_STOPS;
     var trip = index.trips.get(v.tripId());
     if (trip != null && trip.routeId().equals(route.id())) return CHECK_TRIP;
+    boolean listed = route.number() != null && !official.paths(route.number()).isEmpty();
+    if (listed && official.onRoute(route.number(), v.lat(), v.lng())) return CHECK_ON_OFFICIAL;
     var paths = patternPaths(route.id());
-    if (paths.isEmpty()) return CHECK_NO_STOPS;
+    if (paths.isEmpty()) return listed ? CHECK_OFF_ROUTE : CHECK_NO_STOPS;
     for (var path : paths) {
       double offset =
           path.size() == 1
@@ -452,6 +554,19 @@ public class RegionService {
       if (offset <= ROUTE_CHECK_METERS) return CHECK_ON_ROUTE;
     }
     return CHECK_OFF_ROUTE;
+  }
+
+  /**
+   * For a bus whose route number does not fit ({@link #CHECK_OFF_ROUTE}): the route numbers, at
+   * most {@link RouteIdentifier#MAX_CANDIDATES}, whose current official path contains the path its
+   * route ID's buses were seen driving, and on which this bus is right now. Empty otherwise.
+   */
+  List<String> likelyRoutes(RealtimeSnapshot.Vehicle v, TransitIndex.Route route, String check) {
+    if (!CHECK_OFF_ROUTE.equals(check) || route == null) return List.of();
+    Set<String> out = new LinkedHashSet<>();
+    for (String n : identifier.candidates(route.id()))
+      if (official.onRoute(n, v.lat(), v.lng())) out.add(canonical(n));
+    return List.copyOf(out);
   }
 
   /**
@@ -571,11 +686,13 @@ public class RegionService {
       String routeNumber, String vehicleId, Double eta, String availability, String label,
       String reason, Integer remainingStops, long lastGps, RealtimeSnapshot.Vehicle v,
       Double distanceMeters) {
+    var route = v == null ? null : transit.route(v);
+    String check = v == null ? CHECK_NO_STOPS : routeCheck(v, route);
     return new Upcoming(
         routeNumber, vehicleId, eta, availability, label, reason, remainingStops, lastGps,
         v == null ? null : v.lat(), v == null ? null : v.lng(), v == null ? null : v.speedKmh(),
         distanceMeters == null ? null : Math.round(distanceMeters * 10.0) / 10.0,
-        v == null ? CHECK_NO_STOPS : routeCheck(v, transit.route(v)));
+        check, v == null ? List.of() : likelyRoutes(v, route, check));
   }
 
   /**

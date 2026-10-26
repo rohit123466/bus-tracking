@@ -1,5 +1,5 @@
 import { Circle, CircleMarker, Marker, Polyline, Tooltip } from 'react-leaflet';
-import { busFreshness, routeUnconfirmed } from '../../utils/liveMap';
+import { busFreshness, routeUnconfirmed, shownRoute } from '../../utils/liveMap';
 import { busPin, stopPin, mePin } from '../../utils/mapIcons';
 
 /** Zoom from which buses are drawn as labelled route-number pins instead of dots. */
@@ -20,7 +20,10 @@ export function BusLayer({ buses, now, view, selectedId, onSelect, colors }) {
     const unconfirmed = routeUnconfirmed(b);
     const position = [b.busLatitude, b.busLongitude];
     const select = { click: () => onSelect(b) };
-    const label = `Route ${b.routeCode}${unconfirmed ? ' (unconfirmed)' : ''}`;
+    const shown = shownRoute(b);
+    const label = shown !== b.routeCode
+      ? `Likely route ${shown} (feed says ${b.routeCode})`
+      : `Route ${b.routeCode}${unconfirmed ? ' (unconfirmed)' : ''}`;
     if (!selected && !detailed) {
       const fill = freshness === 'LIVE' ? colors.live : colors.delayed;
       return (
@@ -43,7 +46,7 @@ export function BusLayer({ buses, now, view, selectedId, onSelect, colors }) {
       <Marker
         key={b.vehicleId}
         position={position}
-        icon={busPin(b.routeCode, freshness, selected, unconfirmed)}
+        icon={busPin(shown, freshness, selected, unconfirmed, shown !== b.routeCode)}
         zIndexOffset={selected ? 2000 : 0}
         eventHandlers={select}
         title={label}

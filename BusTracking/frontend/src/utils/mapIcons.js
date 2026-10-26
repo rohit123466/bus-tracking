@@ -18,17 +18,23 @@ const cache = new Map();
 
 const STATE_TEXT = { LIVE: 'live GPS', DELAYED: 'GPS delayed' };
 
-/** `unconfirmed`: the bus's position doesn't fit its route number (routeCheck OFF_ROUTE). */
-export function busPin(routeCode, freshness = 'LIVE', selected = false, unconfirmed = false) {
+/**
+ * `unconfirmed`: the bus's position doesn't fit its route number (routeCheck OFF_ROUTE).
+ * `likely`: `routeCode` is the route it is probably running, estimated from GPS, not the feed's.
+ */
+export function busPin(routeCode, freshness = 'LIVE', selected = false, unconfirmed = false, likely = false) {
   const label = String(routeCode ?? '?');
-  const key = `bus|${label}|${freshness}|${selected}|${unconfirmed}`;
+  const key = `bus|${label}|${freshness}|${selected}|${unconfirmed}|${likely}`;
   let icon = cache.get(key);
   if (!icon) {
     const text = unconfirmed ? `${label}?` : label;
     const width = Math.max(34, text.length * (selected ? 9 : 8) + (selected ? 24 : 18));
     const height = selected ? 30 : 24;
     const cls = `pin-bus${freshness === 'DELAYED' ? ' pin-bus-delayed' : ''}${unconfirmed ? ' pin-bus-unconfirmed' : ''}${selected ? ' pin-bus-selected' : ''}`;
-    const aria = `Bus reported on route ${escapeHtml(label)}${unconfirmed ? ' (route unconfirmed)' : ''}, ${STATE_TEXT[freshness] ?? 'position'}${selected ? ', selected' : ''}`;
+    const route = likely
+      ? `Bus likely on route ${escapeHtml(label)} (estimated from GPS)`
+      : `Bus reported on route ${escapeHtml(label)}${unconfirmed ? ' (route unconfirmed)' : ''}`;
+    const aria = `${route}, ${STATE_TEXT[freshness] ?? 'position'}${selected ? ', selected' : ''}`;
     icon = L.divIcon({
       className: 'pin',
       html: `<span class="${cls}" role="img" aria-label="${aria}">${escapeHtml(text)}</span>`,

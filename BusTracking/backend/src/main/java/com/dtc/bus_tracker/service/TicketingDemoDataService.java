@@ -48,9 +48,9 @@ import java.util.Set;
  * validation the conductor uses - so the seed itself proves e.g. that
  * Neha's C&rarr;E ticket on seat 05 is legal after Rahul's A&rarr;C one.
  *
- * Seeding runs on ApplicationReadyEvent, i.e. after the GTFS import runner:
- * GtfsImportService skips importing when any route exists, so the demo route
- * must never be created first.
+ * Seeding runs on ApplicationReadyEvent, i.e. after the GTFS import runner.
+ * GtfsImportService keeps this route ({@link #ROUTE_CODE}) and its DEMO-*
+ * stops when it replaces an outdated feed.
  */
 @Service
 @RequiredArgsConstructor

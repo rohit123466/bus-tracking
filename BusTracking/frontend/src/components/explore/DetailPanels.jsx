@@ -8,7 +8,9 @@ import usePolling from '../../hooks/usePolling';
 import { getRouteGeometry, getStopArrivals } from '../../api/client';
 import { ageText, clockText, distanceText, durationText } from '../../utils/format';
 import { placeParam } from '../../utils/journey';
-import { OFF_ROUTE_EXPLANATION, ROUTE_CHECK_TEXT, routeUnconfirmed } from '../../utils/liveMap';
+import {
+  likelyRouteExplanation, likelyRoutes, OFF_ROUTE_EXPLANATION, ROUTE_CHECK_TEXT, routeList, routeUnconfirmed, shownRoute,
+} from '../../utils/liveMap';
 
 const NEXT_STOP_SOURCE = {
   FEED_STOP_SEQUENCE: 'reported by the feed',
@@ -31,16 +33,20 @@ function BackHeader({ onBack, backLabel, children }) {
 export function BusPanel({ bus, gone, now, geometry, onBack, backLabel, onShowRoute, onCentre }) {
   const fetchGeometry = !geometry && !!bus?.routeCode;
   const geo = usePolling(fetchGeometry ? `geo|${bus.routeCode}` : null, s => getRouteGeometry(bus.routeCode, s), { interval: 0 });
+  const likely = likelyRoutes(bus);
+  const shown = shownRoute(bus);
   const patterns = (geometry ?? geo.data)?.patterns ?? [];
-  const pattern = patterns.find(p => p.routeId === bus.routeId)
+  // The terminus comes from the feed number's 2024 timetable: wrong for a bus on another route.
+  const pattern = likely.length ? null : patterns.find(p => p.routeId === bus.routeId)
     ?? (bus.direction ? patterns.filter(p => p.direction === bus.direction) : []).find((p, _, all) => all.length === 1);
 
   return (
     <div className="stack" style={{ gap: 16 }}>
       <BackHeader onBack={onBack} backLabel={backLabel}>
-        <span className="route-chip route-chip-lg">{bus.routeCode}</span>
+        <span className="route-chip route-chip-lg">{shown}</span>
         <h2 className="grow" style={{ fontSize: '1.15rem' }}>
-          Route {bus.routeCode}
+          {likely.length ? `Likely route ${routeList(likely)}` : `Route ${bus.routeCode}`}
+          {likely.length > 0 && <span className="small muted" style={{ display: 'block', fontWeight: 500 }}>feed says {bus.routeCode}</span>}
           {pattern && <span className="small muted" style={{ display: 'block', fontWeight: 500 }}>towards {pattern.towards}</span>}
         </h2>
         {!gone && <FreshnessBadge epochSeconds={bus.lastUpdatedEpochSeconds} now={now} />}
@@ -52,7 +58,11 @@ export function BusPanel({ bus, gone, now, geometry, onBack, backLabel, onShowRo
         </Notice>
       )}
 
-      {routeUnconfirmed(bus) && (
+      {likely.length > 0 ? (
+        <Notice tone="warn">
+          <strong>Likely route {routeList(likely)}.</strong> {likelyRouteExplanation(bus)}
+        </Notice>
+      ) : routeUnconfirmed(bus) && (
         <Notice tone="warn">
           <strong>Route number unconfirmed.</strong> {OFF_ROUTE_EXPLANATION}
         </Notice>
