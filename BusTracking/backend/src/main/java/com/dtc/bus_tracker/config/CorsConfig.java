@@ -1,5 +1,6 @@
 package com.dtc.bus_tracker.config;
 
+import com.dtc.bus_tracker.live.TransitController;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,7 +21,9 @@ public class CorsConfig {
                 registry.addMapping("/api/**")
                         .allowedOrigins(allowedOrigins)
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                        .allowedHeaders("*");
+                        .allowedHeaders("*")
+                        // Read by the Live Map to poll just after the next feed snapshot.
+                        .exposedHeaders(TransitController.NEXT_UPDATE_HEADER);
             }
         };
     }

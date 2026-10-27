@@ -12,3 +12,5 @@ data/
 
 # Local debug dumps of the realtime feed
 *.pb
+# Recorded live answers for perf/map-bench.mjs
+BusTracking/perf/snapshots/

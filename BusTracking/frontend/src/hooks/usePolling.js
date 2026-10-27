@@ -12,15 +12,18 @@ const EMPTY = { data: undefined, error: null, loading: false, updatedAt: null };
  * - While the tab is hidden nothing is fetched (unless `pauseWhenHidden` is false); on return, or
  *   when the browser comes back online, it refreshes immediately.
  * - `interval: 0` fetches once per key.
+ * - `nextDelay(data)`, when given, picks the delay after each success instead of `interval`
+ *   (e.g. to poll right after the server's next update); failures still back off.
  * - Everything is cancelled on unmount.
  */
 export default function usePolling(key, fetcher, {
-  interval = 10000, enabled = true, keepPrevious = false, pauseWhenHidden = true, maxBackoff = 60000,
+  interval = 10000, enabled = true, keepPrevious = false, pauseWhenHidden = true, maxBackoff = 60000, nextDelay,
 } = {}) {
   const [state, setState] = useState({ ...EMPTY, key: null });
   const [tick, setTick] = useState(0);
   const fetcherRef = useRef(fetcher);
-  useEffect(() => { fetcherRef.current = fetcher; });
+  const nextDelayRef = useRef(nextDelay);
+  useEffect(() => { fetcherRef.current = fetcher; nextDelayRef.current = nextDelay; });
 
   const active = enabled && key != null;
 
@@ -44,10 +47,12 @@ export default function usePolling(key, fetcher, {
       inFlight = true;
       lastRun = Date.now();
       ctrl = new AbortController();
+      let next = interval;
       try {
         const data = await fetcherRef.current(ctrl.signal);
         if (disposed) return;
         failures = 0;
+        if (nextDelayRef.current) next = nextDelayRef.current(data);
         setState({ data, error: null, loading: false, updatedAt: Date.now(), key });
       } catch (err) {
         if (disposed || isAbort(err)) return;
@@ -58,7 +63,7 @@ export default function usePolling(key, fetcher, {
       } finally {
         inFlight = false;
       }
-      schedule(failures ? Math.min(maxBackoff, Math.max(interval, 5000) * 2 ** (failures - 1)) : interval);
+      schedule(failures ? Math.min(maxBackoff, Math.max(interval, 5000) * 2 ** (failures - 1)) : next);
     }
 
     const resume = () => {

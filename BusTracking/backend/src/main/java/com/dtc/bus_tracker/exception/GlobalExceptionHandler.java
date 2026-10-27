@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
+import org.springframework.web.util.DisconnectedClientHelper;
+
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -99,6 +101,12 @@ public class GlobalExceptionHandler {
             var status = HttpStatus.valueOf(errorResponse.getStatusCode().value());
             String detail = errorResponse.getBody().getDetail();
             return errorBody(status, status.getReasonPhrase(), detail != null ? detail : status.getReasonPhrase());
+        }
+        // The client went away mid-response (the live map aborts a superseded poll): nothing can
+        // be sent and nothing failed on the server, so don't log a stack trace for it.
+        if (DisconnectedClientHelper.isClientDisconnectedException(ex)) {
+            log.debug("Client disconnected: {}", ex.getMessage());
+            return null;
         }
         log.error("Unhandled exception", ex);
         return errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", "An unexpected server error occurred.");

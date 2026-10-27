@@ -35,9 +35,21 @@ public class RealtimeSnapshot {
   private volatile Set<String> cancelled = Set.of();
   public volatile long fetchedAt;
   public volatile String feedError = "Live feed has not been received.";
+  /** Incremented every time positions or trip updates are replaced, so derived views rebuild. */
+  private volatile long generation;
+  private final List<Runnable> vehicleListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
   public Map<String, Vehicle> vehicles() {
     return vehicles;
+  }
+
+  public long generation() {
+    return generation;
+  }
+
+  /** Runs on the feed thread right after each vehicle update; keep it quick or hand off. */
+  public void onVehiclesUpdated(Runnable listener) {
+    vehicleListeners.add(listener);
   }
 
   public List<Prediction> predictions(String tripId) {
@@ -51,6 +63,25 @@ public class RealtimeSnapshot {
   /** Returns the current set of cancelled trip IDs from the latest TripUpdates feed. */
   public Set<String> cancelledTrips() {
     return cancelled;
+  }
+
+  /**
+   * The feed was polled and has not changed (HTTP 304). Same outcome as accepting the identical
+   * feed again: the fetch time moves on and the "no fresh positions" check is redone.
+   */
+  public synchronized void unchanged() {
+    fetchedAt = Instant.now().getEpochSecond();
+    String error = noFreshVehicles(vehicles.values()) ? NO_FRESH_VEHICLES : null;
+    if (!Objects.equals(error, feedError)) {
+      feedError = error;
+      generation++;
+    }
+  }
+
+  private static final String NO_FRESH_VEHICLES = "DTC feed contains no fresh vehicle positions.";
+
+  private static boolean noFreshVehicles(Collection<Vehicle> list) {
+    return !list.isEmpty() && list.stream().noneMatch(v -> fresh(v.timestamp()));
   }
 
   public static boolean fresh(long stamp) {
@@ -142,15 +173,17 @@ public class RealtimeSnapshot {
         }
       }
     }
-    if (updateVehicles) {
-      vehicles = Map.copyOf(next);
-      fetchedAt = Instant.now().getEpochSecond();
-      feedError = !next.isEmpty() && next.values().stream().noneMatch(v -> fresh(v.timestamp()))
-          ? "DTC feed contains no fresh vehicle positions." : null;
-    }
     if (updateTrips || hasUpdates) {
       predictions = Map.copyOf(times);
       cancelled = Set.copyOf(cancelledTrips);
+      generation++;
+    }
+    if (updateVehicles) {
+      vehicles = Map.copyOf(next);
+      fetchedAt = Instant.now().getEpochSecond();
+      feedError = noFreshVehicles(next.values()) ? NO_FRESH_VEHICLES : null;
+      generation++;
+      for (var listener : vehicleListeners) listener.run();
     }
   }
 }

@@ -15,10 +15,16 @@ class DtcApiClientTest {
     DtcApiClient client;
     int status;
     byte[] body;
+    String etag;
+    final java.util.List<String> ifNoneMatch = new java.util.ArrayList<>();
     @BeforeEach void setup() throws Exception {
-        status = 200; body = new byte[]{1, 2, 3};
+        status = 200; body = new byte[]{1, 2, 3}; etag = null;
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/feed", exchange -> {
+            String sent = exchange.getRequestHeaders().getFirst("If-None-Match");
+            ifNoneMatch.add(sent);
+            if (etag != null && etag.equals(sent)) { exchange.sendResponseHeaders(304, -1); exchange.close(); return; }
+            if (etag != null) exchange.getResponseHeaders().set("ETag", etag);
             exchange.sendResponseHeaders(status, body.length);
             try (var output = exchange.getResponseBody()) { output.write(body); }
         });
@@ -62,5 +68,42 @@ class DtcApiClientTest {
         assertEquals(1, events.size());
         assertEquals("bus", events.getFirst().getVehicleId());
         assertEquals(now, events.getFirst().getTimestamp());
+    }
+    @Test void unchangedFeedIsNotDownloadedOrRepublished() throws Exception {
+        long now = Instant.now().getEpochSecond();
+        etag = "\"v1\"";
+        body = FeedMessage.newBuilder().setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0"))
+            .addEntity(vehicle("1", "bus", now, 28.6f)).build().toByteArray();
+        assertEquals(1, client.fetchVehiclePositions().size());
+        long generation = snapshot.generation();
+
+        // Same ETag: 304, nothing new to publish, positions and generation kept.
+        assertTrue(client.fetchVehiclePositions().isEmpty());
+        assertEquals("\"v1\"", ifNoneMatch.getLast());
+        assertEquals(generation, snapshot.generation());
+        assertEquals(1, snapshot.vehicles().size());
+        assertNull(snapshot.feedError);
+
+        // A new feed version is downloaded and replaces the snapshot.
+        etag = "\"v2\"";
+        body = FeedMessage.newBuilder().setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0"))
+            .addEntity(vehicle("1", "bus", now + 10, 28.61f)).build().toByteArray();
+        assertEquals(1, client.fetchVehiclePositions().size());
+        assertEquals(now + 10, snapshot.vehicles().get("bus").timestamp());
+        assertTrue(snapshot.generation() > generation);
+    }
+    @Test void unchangedFeedStillReportsWhenItsPositionsHaveAged() throws Exception {
+        long now = Instant.now().getEpochSecond();
+        etag = "\"v1\"";
+        body = FeedMessage.newBuilder().setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0"))
+            .addEntity(vehicle("1", "bus", now - 119, 28.6f)).build().toByteArray();
+        client.fetchVehiclePositions();
+        assertNull(snapshot.feedError);
+        // Re-check as a re-accepted identical feed would: the only position is now too old.
+        Thread.sleep(2100);
+        long generation = snapshot.generation();
+        assertTrue(client.fetchVehiclePositions().isEmpty());
+        assertTrue(snapshot.feedError.contains("no fresh vehicle positions"));
+        assertTrue(snapshot.generation() > generation, "cached answers must see the new feed state");
     }
 }

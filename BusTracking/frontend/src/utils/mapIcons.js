@@ -47,13 +47,19 @@ export function busPin(routeCode, freshness = 'LIVE', selected = false, unconfir
 }
 
 export function stopPin(name, selected = false) {
-  const size = selected ? 22 : 14;
-  return L.divIcon({
-    className: 'pin',
-    html: `<span class="pin-stop${selected ? ' pin-stop-selected' : ''}" role="img" aria-label="Bus stop: ${escapeHtml(name || 'unnamed')}${selected ? ', selected' : ''}"></span>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-  });
+  const key = `stop|${name}|${selected}`;
+  let icon = cache.get(key);
+  if (!icon) {
+    const size = selected ? 22 : 14;
+    icon = L.divIcon({
+      className: 'pin',
+      html: `<span class="pin-stop${selected ? ' pin-stop-selected' : ''}" role="img" aria-label="Bus stop: ${escapeHtml(name || 'unnamed')}${selected ? ', selected' : ''}"></span>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+    });
+    cache.set(key, icon);
+  }
+  return icon;
 }
 
 export const mePin = L.divIcon({

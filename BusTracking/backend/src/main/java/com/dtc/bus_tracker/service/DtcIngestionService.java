@@ -9,7 +9,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,7 +58,10 @@ public class DtcIngestionService {
         this.transitIndex = transitIndex;
     }
 
-    @Scheduled(fixedDelayString = "${dtc.poll.interval:10000}")
+    /** GPS timestamp last published per vehicle, so a fix is written to the store/history once. */
+    private final Map<String, Long> publishedStamps = new ConcurrentHashMap<>();
+
+    @Scheduled(fixedDelayString = "${dtc.poll.interval:4000}")
     public void pollAndPublish() {
         try {
             if (routeCodes.isEmpty() || System.currentTimeMillis() - mappingsLoadedAt > 300000) {
@@ -73,8 +78,12 @@ public class DtcIngestionService {
                     // Vehicles where these two disagree are rejected to avoid publishing
                     // a vehicle on the wrong route (matches the check in LiveTransitService).
                     .filter(e -> isTripRouteConsistent(e))
+                    // The feed repeats a vehicle's last fix until it reports again; re-publishing
+                    // it would only rewrite the same cache entry and add a duplicate history row.
+                    .filter(e -> e.getTimestamp() == null
+                            || !e.getTimestamp().equals(publishedStamps.get(e.getVehicleId())))
                     .toList();
-            publishInBackground(events);
+            if (!events.isEmpty()) publishInBackground(events);
         } catch (Exception e) {
             System.err.println("DTC ingestion failed: " + e.getMessage());
             e.printStackTrace();
@@ -95,7 +104,10 @@ public class DtcIngestionService {
         }
         publishExecutor.execute(() -> {
             try {
-                events.forEach(publisher::publish);
+                for (BusLocationEvent event : events) {
+                    publisher.publish(event);
+                    if (event.getTimestamp() != null) publishedStamps.put(event.getVehicleId(), event.getTimestamp());
+                }
                 System.out.println("Published " + events.size() + " bus location events (North/North West Delhi routes)");
             } catch (Exception e) {
                 System.err.println("DTC publish failed: " + e.getMessage());

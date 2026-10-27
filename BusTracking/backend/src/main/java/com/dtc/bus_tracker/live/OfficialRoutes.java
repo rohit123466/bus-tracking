@@ -27,6 +27,18 @@ public class OfficialRoutes {
     public double lengthMeters() {
       return cumulative.length == 0 ? 0 : cumulative[cumulative.length - 1];
     }
+
+    // One object per listed direction, used as a map key for every grid hit in near(): the
+    // record's value hash/equals walked all its points each time (a third of matching time).
+    @Override
+    public boolean equals(Object o) {
+      return this == o;
+    }
+
+    @Override
+    public int hashCode() {
+      return Integer.hashCode(id);
+    }
   }
 
   /**

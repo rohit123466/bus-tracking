@@ -2,7 +2,11 @@ package com.dtc.bus_tracker.live;
 
 import java.util.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -17,6 +21,7 @@ public class TransitController {
   private final ServiceAlertService alerts;
   // Field-injected so the existing five-argument constructor (used by tests) is unchanged.
   @Autowired private RegionService regions;
+  @Autowired private RegionalBusesCache regionalCache;
   @Autowired private RouteLearner learner;
   @Autowired private JourneyService journeys;
 
@@ -48,15 +53,34 @@ public class TransitController {
 
   /**
    * Live buses on region-eligible routes (optionally one route number) that are currently inside
-   * the area; {@code insideAreaOnly=false} also returns those elsewhere in Delhi.
+   * the area; {@code insideAreaOnly=false} also returns those elsewhere in Delhi. The body is a
+   * {@link RegionService.RegionalBuses}, served pre-encoded from {@link RegionalBusesCache}: gzip
+   * when the client accepts it, 304 when its ETag still matches. {@value #NEXT_UPDATE_HEADER} says
+   * how many milliseconds until the server expects its next feed snapshot.
    */
   @GetMapping("/buses/regional")
-  public RegionService.RegionalBuses regionalBuses(
+  public ResponseEntity<byte[]> regionalBuses(
       @RequestParam(defaultValue = "ANY") String region,
       @RequestParam(defaultValue = "") String routeNumber,
-      @RequestParam(defaultValue = "true") boolean insideAreaOnly) {
-    return regions.buses(RegionService.Filter.parse(region), routeNumber, insideAreaOnly);
+      @RequestParam(defaultValue = "true") boolean insideAreaOnly,
+      @RequestHeader(value = HttpHeaders.ACCEPT_ENCODING, required = false) String acceptEncoding,
+      @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
+    var encoded = regionalCache.get(RegionService.Filter.parse(region), routeNumber, insideAreaOnly);
+    var response =
+        ResponseEntity.status(
+                encoded.etag().equals(ifNoneMatch) ? HttpStatus.NOT_MODIFIED : HttpStatus.OK)
+            .eTag(encoded.etag())
+            // Stored but always revalidated: never shown stale, unchanged answers cost a 304.
+            .cacheControl(CacheControl.noCache())
+            .varyBy(HttpHeaders.ACCEPT_ENCODING)
+            .header(NEXT_UPDATE_HEADER, String.valueOf(regionalCache.nextUpdateInMs()));
+    if (encoded.etag().equals(ifNoneMatch)) return response.build();
+    boolean gzip = acceptEncoding != null && acceptEncoding.toLowerCase(Locale.ROOT).contains("gzip");
+    if (gzip) response.header(HttpHeaders.CONTENT_ENCODING, "gzip");
+    return response.contentType(MediaType.APPLICATION_JSON).body(gzip ? encoded.gzip() : encoded.json());
   }
+
+  public static final String NEXT_UPDATE_HEADER = "X-Next-Update-In";
 
   /** Nearby stops inside the area served by region-eligible routes, with upcoming buses. */
   @GetMapping("/stops/nearby-regional")

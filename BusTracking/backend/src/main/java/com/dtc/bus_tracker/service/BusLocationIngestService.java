@@ -17,6 +17,9 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Single entry point every ingestion path (direct-to-Redis publisher, demo
@@ -84,12 +87,25 @@ public class BusLocationIngestService {
         }
 
         if (event.getRouteId() != null) {
-            Route route = routeRepository.findByRouteCode(event.getRouteId()).orElse(null);
+            Route route = routeByCode(event.getRouteId());
             if (route != null) {
                 bus.setRoute(route);
             }
         }
         return busRepository.save(bus);
+    }
+
+    private static final long ROUTE_CACHE_MS = 300_000;
+    /** route_code -> route, so each event does not query the routes table again. */
+    private final Map<String, Optional<Route>> routesByCode = new ConcurrentHashMap<>();
+    private volatile long routesCachedAt;
+
+    private Route routeByCode(String code) {
+        if (System.currentTimeMillis() - routesCachedAt > ROUTE_CACHE_MS) {
+            routesByCode.clear();
+            routesCachedAt = System.currentTimeMillis();
+        }
+        return routesByCode.computeIfAbsent(code, routeRepository::findByRouteCode).orElse(null);
     }
 
     private void recordHistory(Bus bus, BusLocationEvent event) {

@@ -310,7 +310,12 @@ public class RegionService {
   }
 
   public Set<String> eligibleNumbers(Filter filter) {
-    return regionsByNumber().entrySet().stream()
+    return eligibleNumbers(regionsByNumber(), filter);
+  }
+
+  private static Set<String> eligibleNumbers(
+      Map<String, EnumSet<TransitIndex.Region>> byNumber, Filter filter) {
+    return byNumber.entrySet().stream()
         .filter(e -> matches(e.getValue(), filter))
         .map(Map.Entry::getKey)
         .collect(Collectors.toCollection(TreeSet::new));
@@ -351,7 +356,7 @@ public class RegionService {
     String requested = routeNumber == null ? "" : routeNumber.trim();
     var all = transit.buses(requested);
     var byNumber = regionsByNumber();
-    Set<String> eligible = eligibleNumbers(filter);
+    Set<String> eligible = eligibleNumbers(byNumber, filter);
     Map<String, RealtimeSnapshot.Vehicle> vehicles = new HashMap<>();
     for (var v : transit.liveVehicles()) vehicles.put(v.id(), v);
 
@@ -401,13 +406,14 @@ public class RegionService {
       out.add(
           new RegionalBus(
               b.vehicleId(), b.routeId(), b.routeCode(), b.direction(), b.tripId(),
-              b.busLatitude(), b.busLongitude(), b.speedKmh(), b.lastUpdatedEpochSeconds(),
-              b.mappingSource(), b.distanceFromShapeMeters(), b.offRouteFlag(), regions,
+              round(b.busLatitude(), 6), round(b.busLongitude(), 6), round(b.speedKmh(), 1),
+              b.lastUpdatedEpochSeconds(), b.mappingSource(),
+              round(b.distanceFromShapeMeters(), 1), b.offRouteFlag(), regions,
               next == null ? null : next.stop().id(),
               next == null ? null : next.stop().name(),
               next == null ? null : next.source(),
               next == null ? null : next.distance(),
-              next == null ? null : next.etaMinutes(),
+              next == null ? null : round(next.etaMinutes(), 2),
               next == null || next.etaMinutes() == null ? null : next.basis(),
               check, likely));
     }
@@ -458,28 +464,50 @@ public class RegionService {
    * against the trip's direction of travel.
    */
   Progress locate(RealtimeSnapshot.Vehicle v, TransitIndex.Trip trip) {
-    var visits = trip.visits();
-    if (visits.size() < 2) return null;
-    if (visits.stream().map(TransitIndex.Visit::stopId).distinct().count() != visits.size())
-      return null;
-    List<TransitIndex.Point> points = new ArrayList<>(visits.size());
-    double[] cumulative = new double[visits.size()];
-    TransitIndex.Stop prev = null;
-    for (int i = 0; i < visits.size(); i++) {
-      var s = index.stops.get(visits.get(i).stopId());
-      if (s == null) return null;
-      points.add(new TransitIndex.Point(s.lat(), s.lng(), i));
-      cumulative[i] =
-          prev == null ? 0 : cumulative[i - 1] + Geometry.distance(prev.lat(), prev.lng(), s.lat(), s.lng());
-      prev = s;
-    }
-    var p = Geometry.project(points, v.lat(), v.lng());
+    return locate(v, pathOf(trip));
+  }
+
+  private Progress locate(RealtimeSnapshot.Vehicle v, PatternPath path) {
+    if (path.cumulative() == null) return null;
+    var p = Geometry.project(path.points(), v.lat(), v.lng());
     if (p.offset() > MAX_PATH_OFFSET_METERS) return null;
     if (v.bearing() != null && v.speedKmh() != null && v.speedKmh() > 3) {
       double delta = Math.abs(v.bearing() - p.bearing());
       if (Math.min(delta, 360 - delta) > 100) return null;
     }
-    return new Progress(p.along(), cumulative, visits);
+    return new Progress(p.along(), path.cumulative(), path.trip().visits());
+  }
+
+  /**
+   * A trip's stops as points, plus each stop's distance from the first along the straight lines
+   * joining them. {@code cumulative} is null when the trip cannot be located on (fewer than two
+   * stops, a repeated stop makes the position ambiguous, or a stop is missing from stops.txt);
+   * {@code points} then still holds the stops that exist, for {@link #routeCheck}.
+   */
+  record PatternPath(TransitIndex.Trip trip, List<TransitIndex.Point> points, double[] cumulative) {}
+
+  private PatternPath pathOf(TransitIndex.Trip trip) {
+    var visits = trip.visits();
+    List<TransitIndex.Point> points = new ArrayList<>(visits.size());
+    double[] cumulative = new double[visits.size()];
+    Set<String> seen = new HashSet<>();
+    boolean complete = visits.size() >= 2;
+    TransitIndex.Stop prev = null;
+    for (int i = 0; i < visits.size(); i++) {
+      var visit = visits.get(i);
+      complete &= seen.add(visit.stopId());
+      var s = index.stops.get(visit.stopId());
+      if (s == null) {
+        complete = false;
+        continue;
+      }
+      points.add(new TransitIndex.Point(s.lat(), s.lng(), visit.sequence()));
+      if (complete)
+        cumulative[i] =
+            prev == null ? 0 : cumulative[i - 1] + Geometry.distance(prev.lat(), prev.lng(), s.lat(), s.lng());
+      prev = s;
+    }
+    return new PatternPath(trip, List.copyOf(points), complete ? cumulative : null);
   }
 
   // GTFS route_id -> one representative trip per distinct stop pattern. Built lazily, once.
@@ -506,23 +534,34 @@ public class RegionService {
     return built.getOrDefault(routeId, List.of());
   }
 
-  /** route_id -> each stop pattern as points, for {@link #routeCheck}. Static data, so cached. */
-  private final Map<String, List<List<TransitIndex.Point>>> patternPaths =
+  /**
+   * route_id -> the path of each of its stop patterns, for {@link #routeCheck} and for locating
+   * buses on the route. Static data, so built once per route instead of per bus and request.
+   */
+  private final Map<String, List<PatternPath>> patternPaths =
       new java.util.concurrent.ConcurrentHashMap<>();
 
-  private List<List<TransitIndex.Point>> patternPaths(String routeId) {
+  private List<PatternPath> patternPaths(String routeId) {
     return patternPaths.computeIfAbsent(routeId, id -> {
-      List<List<TransitIndex.Point>> out = new ArrayList<>();
-      for (var trip : patterns(id)) {
-        List<TransitIndex.Point> points = new ArrayList<>();
-        for (var visit : trip.visits()) {
-          var s = index.stops.get(visit.stopId());
-          if (s != null) points.add(new TransitIndex.Point(s.lat(), s.lng(), visit.sequence()));
-        }
-        if (!points.isEmpty()) out.add(List.copyOf(points));
-      }
+      List<PatternPath> out = new ArrayList<>();
+      for (var trip : patterns(id)) out.add(pathOf(trip));
       return List.copyOf(out);
     });
+  }
+
+  /**
+   * The feed's positions are float32 (~0.2 m steps at Delhi's latitude), so 6 decimal places
+   * (~0.1 m) keep every real digit; the remaining digits of the widened double were noise that
+   * made up about a quarter of the compressed /buses/regional answer.
+   */
+  static double round(double value, int places) {
+    double scale = Math.pow(10, places);
+    return Math.round(value * scale) / scale;
+  }
+
+  static Double round(Double value, int places) {
+    if (value == null || !Double.isFinite(value)) return value;
+    return round(value.doubleValue(), places);
   }
 
   private static List<String> concat(String first, List<String> rest) {
@@ -544,7 +583,7 @@ public class RegionService {
     if (trip != null && trip.routeId().equals(route.id())) return CHECK_TRIP;
     boolean listed = route.number() != null && !official.paths(route.number()).isEmpty();
     if (listed && official.onRoute(route.number(), v.lat(), v.lng())) return CHECK_ON_OFFICIAL;
-    var paths = patternPaths(route.id());
+    var paths = patternPaths(route.id()).stream().map(PatternPath::points).filter(p -> !p.isEmpty()).toList();
     if (paths.isEmpty()) return listed ? CHECK_OFF_ROUTE : CHECK_NO_STOPS;
     for (var path : paths) {
       double offset =
@@ -579,7 +618,7 @@ public class RegionService {
     if (trip != null) return locate(v, trip);
     if (route == null) return null;
     Progress found = null;
-    for (var pattern : patterns(route.id())) {
+    for (var pattern : patternPaths(route.id())) {
       var p = locate(v, pattern);
       if (p == null) continue;
       if (found != null) return null; // ambiguous between patterns
