@@ -117,10 +117,36 @@ export const searchPlaces = (query, limit = 5, signal) =>
 export const adminLogin = (username, password) =>
   client.post('/auth/login', { username, password }).then((res) => res.data);
 
-export const getAdminStats = () => client.get('/admin/stats').then((res) => res.data);
+export const getAdminStats = (signal) => client.get('/admin/stats', { signal }).then((res) => res.data);
+
+/** KPI samples from the last two hours (server-side, every 30 s), oldest first. */
+export const getAdminStatsHistory = (signal) =>
+  client.get('/admin/stats/history', { signal }).then((res) => res.data);
+
+/** One page of the fleet list: { q, status, route, sort, page, size } → { content, totalElements, statusCounts, … }. */
+export const getAdminBuses = (params, signal) =>
+  client.get('/admin/buses', { params, signal }).then((res) => res.data);
+
+/** Every page of the fleet list for `params` (up to `maxPages` of 500), e.g. for CSV export. */
+export async function getAllAdminBuses(params, signal, maxPages = 20) {
+  const rows = [];
+  for (let page = 0; page < maxPages; page++) {
+    const res = await getAdminBuses({ ...params, page, size: 500 }, signal);
+    rows.push(...res.content);
+    if (page + 1 >= res.totalPages) return { rows, total: res.totalElements, complete: true };
+  }
+  return { rows, total: rows.length, complete: false };
+}
+
+export const getFeedHealth = (signal) => client.get('/admin/feed-health', { signal }).then((res) => res.data);
+
+// Spring Boot actuator lives outside /api and outside its CORS rules, so this may fail in a browser
+// on another origin. Plain axios: such a failure must not mark the whole API as unreachable.
+export const getActuatorHealth = (signal) =>
+  axios.get(`${API_BASE.replace(/\/api\/?$/, '')}/actuator/health`, { signal, timeout: 10000 }).then((res) => res.data);
 
 // --- Seat-level ticketing (public) ---
-export const getTicketingBuses = () => client.get('/ticketing/buses').then((res) => res.data);
+export const getTicketingBuses = (signal) => client.get('/ticketing/buses', { signal }).then((res) => res.data);
 
 export const getSeatMap = (busNumber, { fromStopId, toStopId, category } = {}) =>
   client

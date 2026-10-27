@@ -46,6 +46,33 @@ export function busPin(routeCode, freshness = 'LIVE', selected = false, unconfir
   return icon;
 }
 
+const ADMIN_STATE_TEXT = { MOVING: 'moving', SLOW: 'slow or possibly stuck', STALE: 'last position over 2 minutes old' };
+
+/**
+ * Admin live-map bus: `status` from utils/admin liveStatus(). Moving is filled, slow is filled amber
+ * with a "‖" mark, stale is a dashed outline, so the three differ in shape as well as colour.
+ */
+export function adminBusPin(routeLabel, status = 'MOVING', selected = false) {
+  const label = String(routeLabel ?? '?');
+  const key = `admin|${label}|${status}|${selected}`;
+  let icon = cache.get(key);
+  if (!icon) {
+    const text = status === 'SLOW' ? `‖ ${label}` : label;
+    const width = Math.max(34, text.length * (selected ? 9 : 8) + (selected ? 24 : 18));
+    const height = selected ? 30 : 24;
+    const cls = `pin-bus pin-admin-${status.toLowerCase()}${selected ? ' pin-bus-selected' : ''}`;
+    const aria = `Bus on route ${escapeHtml(label)}, ${ADMIN_STATE_TEXT[status] ?? 'position'}${selected ? ', selected' : ''}`;
+    icon = L.divIcon({
+      className: 'pin',
+      html: `<span class="${cls}" role="img" aria-label="${aria}">${escapeHtml(text)}</span>`,
+      iconSize: [width, height],
+      iconAnchor: [width / 2, height / 2],
+    });
+    cache.set(key, icon);
+  }
+  return icon;
+}
+
 export function stopPin(name, selected = false) {
   const key = `stop|${name}|${selected}`;
   let icon = cache.get(key);
