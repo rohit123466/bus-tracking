@@ -27,6 +27,17 @@ public class DtcApiClient {
 
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(8)).build();
 
+    /**
+     * ETag of the last feed accepted. The OTD feed is a static file that changes about every 11 s;
+     * with If-None-Match an unchanged poll is a body-less 304, so the feed can be polled often
+     * (new positions land sooner) without re-downloading, re-parsing or re-publishing anything.
+     */
+    private String feedEtag;
+
+    /**
+     * Fresh vehicle positions from a new feed, or an empty list when the feed is unchanged since
+     * the last call (nothing new to publish).
+     */
     public synchronized List<BusLocationEvent> fetchVehiclePositions() throws Exception {
         try {
             return fetch();
@@ -48,20 +59,25 @@ public class DtcApiClient {
         if (apiKey.isBlank() || apiKey.equals("YOUR_LOCAL_KEY")) { snapshot.feedError = "DTC_API_KEY is not configured; live positions are unavailable."; return List.of(); }
         String url = apiUrl + (apiUrl.contains("?") ? "&" : "?") + "key=" + java.net.URLEncoder.encode(apiKey, java.nio.charset.StandardCharsets.UTF_8);
 
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(java.time.Duration.ofSeconds(12))
-                .GET()
-                .build();
+                .GET();
+        if (feedEtag != null) builder.header("If-None-Match", feedEtag);
 
-        HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        HttpResponse<byte[]> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
 
+        if (response.statusCode() == 304) {
+            snapshot.unchanged();
+            return List.of();
+        }
         if (response.statusCode() != 200 || response.body() == null || response.body().length == 0) {
             throw new FeedResponseException("DTC API returned HTTP " + response.statusCode() + (response.statusCode() == 401 || response.statusCode() == 403 ? "; check DTC_API_KEY authorization." : "; live positions unavailable."));
         }
 
         FeedMessage feed = FeedMessage.parseFrom(response.body());
         snapshot.accept(feed, true, false);
+        feedEtag = response.headers().firstValue("ETag").orElse(null);
         if (!tripUpdatesUrl.isBlank()) {
             try {
                 var updateRequest = HttpRequest.newBuilder(URI.create(tripUpdatesUrl)).timeout(java.time.Duration.ofSeconds(12)).GET().build();

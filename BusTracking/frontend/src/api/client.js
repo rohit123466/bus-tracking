@@ -183,6 +183,11 @@ function canceled() {
  * has aborted.
  */
 function sharedGet(url, params, signal) {
+  return sharedResponse(url, params, signal).then(res => res.data);
+}
+
+/** sharedGet, resolving with the whole axios response (for its headers). */
+function sharedResponse(url, params, signal) {
   const clean = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null));
   const key = `${url}?${new URLSearchParams(clean)}`;
   let entry = inflight.get(key);
@@ -191,7 +196,6 @@ function sharedGet(url, params, signal) {
     entry = { ctrl, users: 0 };
     entry.promise = client
       .get(url, { params: clean, signal: ctrl.signal, timeout: TRANSIT_TIMEOUT_MS })
-      .then(res => res.data)
       .finally(() => { if (inflight.get(key) === entry) inflight.delete(key); });
     inflight.set(key, entry);
   }
@@ -221,9 +225,27 @@ function sharedGet(url, params, signal) {
 // Full-feed rider API uses GTFS string IDs, not legacy database IDs.
 export const transitGet = (path, params = {}, signal) => sharedGet(`/transit${path}`, params, signal);
 
+// Answer -> ms until the server expects its next feed snapshot (X-Next-Update-In), if it said.
+const nextUpdateHints = new WeakMap();
+
 /** Live buses on North / North-West routes currently inside the area (optionally one route). */
 export const getRegionalBuses = ({ region = 'ANY', routeNumber = '' } = {}, signal) =>
-  transitGet('/buses/regional', { region, routeNumber }, signal);
+  sharedResponse('/transit/buses/regional', { region, routeNumber }, signal).then(res => {
+    const hint = Number(res.headers?.['x-next-update-in']);
+    if (res.data && typeof res.data === 'object' && Number.isFinite(hint)) nextUpdateHints.set(res.data, hint);
+    return res.data;
+  });
+
+/**
+ * When to poll /buses/regional again: just after the server's next feed snapshot is due (it
+ * builds the answer right then), instead of a fixed 10 s that lands up to 10 s after new
+ * positions. Falls back to `fallback` for a server that sends no hint.
+ */
+export function regionalPollDelay(data, fallback = 10000) {
+  const hint = nextUpdateHints.get(data);
+  if (hint == null) return fallback;
+  return Math.min(15000, Math.max(2000, hint + 1000));
+}
 
 /** Nearby stops inside the area with every tracked upcoming bus and its labelled ETA. */
 export const getRegionalStops = ({ lat, lng, radiusMeters = 1000, limit = 60, region = 'ANY' }, signal) =>

@@ -9,7 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "routes")
+// route_code is looked up per live bus (ingestion, nearby search); without an index each lookup
+// scanned the whole table.
+@Table(name = "routes", indexes = @Index(name = "idx_route_code", columnList = "route_code"))
 @Builder
 @NoArgsConstructor  // ← ADD THIS
 @AllArgsConstructor

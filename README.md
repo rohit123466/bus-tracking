@@ -10,7 +10,7 @@ Live bus tracking for Delhi Transport Corporation buses, focused on North and No
 Browser (React + Vite + Leaflet)
    │  REST /api/*        STOMP over SockJS /ws (live positions)
    ▼
-Spring Boot 4 API (Java 21) ──► Delhi OTD realtime feed (GTFS-RT VehiclePositions, polled every 10 s)
+Spring Boot 4 API (Java 21) ──► Delhi OTD realtime feed (GTFS-RT VehiclePositions, polled every 4 s with ETags; it changes every ~11 s)
    │        │
    │        └─ in-memory GTFS index (static/GTFS.zip) + RouteLearner (learns real routes from GPS)
    ▼

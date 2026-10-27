@@ -51,6 +51,64 @@ public class TransitIndex {
     }
   }
 
+  /**
+   * A shape's points packed as parallel arrays, materialised on access. shapes.txt has ~1.1M
+   * points: one Point object (plus list slot) each held ~40 MB of heap, about a fifth of the
+   * hosted instance's heap.
+   */
+  private static final class PackedPoints extends AbstractList<Point> implements RandomAccess {
+    private final double[] latLng;
+    private final int[] sequence;
+
+    PackedPoints(double[] latLng, int[] sequence) {
+      this.latLng = latLng;
+      this.sequence = sequence;
+    }
+
+    @Override
+    public Point get(int i) {
+      Objects.checkIndex(i, sequence.length);
+      return new Point(latLng[i * 2], latLng[i * 2 + 1], sequence[i]);
+    }
+
+    @Override
+    public int size() {
+      return sequence.length;
+    }
+  }
+
+  /** Growable buffer collecting one shape's points while loading. */
+  private static final class PointBuffer {
+    private double[] latLng = new double[128];
+    private int[] sequence = new int[64];
+    private int length;
+
+    void add(double lat, double lng, int seq) {
+      if (length == sequence.length) {
+        sequence = Arrays.copyOf(sequence, length * 2);
+        latLng = Arrays.copyOf(latLng, length * 4);
+      }
+      latLng[length * 2] = lat;
+      latLng[length * 2 + 1] = lng;
+      sequence[length++] = seq;
+    }
+
+    /** Points in shape_pt_sequence order (stable for equal sequences), trimmed to size. */
+    PackedPoints sortedBySequence() {
+      Integer[] order = new Integer[length];
+      for (int i = 0; i < length; i++) order[i] = i;
+      Arrays.sort(order, Comparator.comparingInt(i -> sequence[i]));
+      double[] ll = new double[length * 2];
+      int[] seq = new int[length];
+      for (int i = 0; i < length; i++) {
+        ll[i * 2] = latLng[order[i] * 2];
+        ll[i * 2 + 1] = latLng[order[i] * 2 + 1];
+        seq[i] = sequence[order[i]];
+      }
+      return new PackedPoints(ll, seq);
+    }
+  }
+
   /** Growable int buffer collecting one trip's packed stop_times rows while loading. */
   private static final class RowBuffer {
     private int[] rows = new int[64];
@@ -125,7 +183,10 @@ public class TransitIndex {
 
   @PostConstruct
   public void load() throws Exception {
-    read(
+    // Each later file needs the earlier ones (stop_times resolves trips and stops), so they are
+    // consumed in this order; see readInOrder.
+    Map<String, Consumer<Row>> files = new LinkedHashMap<>();
+    files.put(
         "routes.txt",
         r -> {
           String shortName = r.getOrDefault("route_short_name", "").trim();
@@ -136,7 +197,7 @@ public class TransitIndex {
               r.get("route_id"),
               new Route(r.get("route_id"), number, name, direction, shortName.isEmpty()));
         });
-    read(
+    files.put(
         "stops.txt",
         r -> {
           addStop(
@@ -146,7 +207,7 @@ public class TransitIndex {
                   Double.parseDouble(r.get("stop_lat")),
                   Double.parseDouble(r.get("stop_lon"))));
         });
-    read(
+    files.put(
         "trips.txt",
         r ->
             trips.put(
@@ -160,7 +221,7 @@ public class TransitIndex {
     Map<String, Integer> stopIndex = new HashMap<>();
     List<String> stopIds = new ArrayList<>();
     Map<String, RowBuffer> pending = new HashMap<>();
-    read(
+    files.put(
         "stop_times.txt",
         r -> {
           Trip t = trips.get(r.get("trip_id"));
@@ -182,6 +243,17 @@ public class TransitIndex {
                   seconds(r.get("departure_time")));
           routesAtStop.computeIfAbsent(s.id(), k -> new HashSet<>()).add(t.routeId());
         });
+    Map<String, PointBuffer> shapePoints = new HashMap<>();
+    files.put(
+        "shapes.txt",
+        r ->
+            shapePoints
+                .computeIfAbsent(r.get("shape_id"), k -> new PointBuffer())
+                .add(
+                    Double.parseDouble(r.get("shape_pt_lat")),
+                    Double.parseDouble(r.get("shape_pt_lon")),
+                    Integer.parseInt(r.get("shape_pt_sequence"))));
+    readInOrder(files);
     // Preserve GTFS stop sequence, including times beyond midnight.
     String[] stopTable = stopIds.toArray(String[]::new);
     trips.replaceAll(
@@ -196,17 +268,7 @@ public class TransitIndex {
                   t.shapeId(),
                   new PackedVisits(stopTable, rows.sortedBySequence()));
         });
-    read(
-        "shapes.txt",
-        r ->
-            shapes
-                .computeIfAbsent(r.get("shape_id"), k -> new ArrayList<>())
-                .add(
-                    new Point(
-                        Double.parseDouble(r.get("shape_pt_lat")),
-                        Double.parseDouble(r.get("shape_pt_lon")),
-                        Integer.parseInt(r.get("shape_pt_sequence")))));
-    shapes.values().forEach(p -> p.sort(Comparator.comparingInt(Point::sequence)));
+    shapePoints.forEach((id, points) -> shapes.put(id, points.sortedBySequence()));
     if (routes.isEmpty() || stops.isEmpty())
       throw new IllegalStateException(
           "GTFS route/stop mappings are empty; resolve Git LFS and configure a valid GTFS"
@@ -306,21 +368,64 @@ public class TransitIndex {
     return (int) Math.floor(lat * 100) + ":" + (int) Math.floor(lng * 100);
   }
 
-  private void read(String file, Consumer<Map<String, String>> consume) throws Exception {
+  /** One CSV row, looked up by column name; values are trimmed, missing columns are null. */
+  static final class Row {
+    private final Map<String, Integer> columns;
+    private String[] values;
+
+    Row(String[] header) {
+      columns = new HashMap<>();
+      for (int i = 0; i < header.length; i++) columns.put(header[i].replace("\ufeff", "").trim(), i);
+    }
+
+    public String get(String column) {
+      Integer i = columns.get(column);
+      return i == null || i >= values.length ? null : values[i].trim();
+    }
+
+    public String getOrDefault(String column, String fallback) {
+      String v = get(column);
+      return v == null ? fallback : v;
+    }
+  }
+
+  /**
+   * Reads the files in the map's order in one pass over the archive when it stores them in that
+   * order (ZipInputStream cannot seek, so reading each file separately re-inflated every earlier
+   * entry, ~90 MB of stop_times to reach shapes). A file stored out of order is read afterwards,
+   * together with every file after it, so each still sees the ones before it loaded.
+   */
+  private void readInOrder(Map<String, Consumer<Row>> files) throws Exception {
+    List<String> order = new ArrayList<>(files.keySet());
+    int next = 0;
+    try (ZipInputStream zip = new ZipInputStream(archive.getInputStream())) {
+      ZipEntry entry;
+      while (next < order.size() && (entry = zip.getNextEntry()) != null)
+        if (entry.getName().equals(order.get(next))) consume(zip, files.get(order.get(next++)));
+    }
+    for (; next < order.size(); next++) read(order.get(next), files.get(order.get(next)));
+  }
+
+  private void read(String file, Consumer<Row> consume) throws Exception {
     try (ZipInputStream zip = new ZipInputStream(archive.getInputStream())) {
       ZipEntry entry;
       while ((entry = zip.getNextEntry()) != null)
         if (entry.getName().equals(file)) {
-          CSVReader reader = new CSVReader(new InputStreamReader(zip, StandardCharsets.UTF_8));
-          String[] header = reader.readNext(), row;
-          while ((row = reader.readNext()) != null) {
-            Map<String, String> values = new HashMap<>();
-            for (int i = 0; i < header.length && i < row.length; i++)
-              values.put(header[i].replace("\ufeff", "").trim(), row[i].trim());
-            consume.accept(values);
-          }
+          consume(zip, consume);
           return;
         }
+    }
+  }
+
+  private static void consume(ZipInputStream zip, Consumer<Row> consume) throws Exception {
+    // Not closed: that would close the archive stream mid-pass.
+    CSVReader reader = new CSVReader(new InputStreamReader(zip, StandardCharsets.UTF_8));
+    String[] header = reader.readNext(), row;
+    if (header == null) return;
+    Row current = new Row(header);
+    while ((row = reader.readNext()) != null) {
+      current.values = row;
+      consume.accept(current);
     }
   }
 }

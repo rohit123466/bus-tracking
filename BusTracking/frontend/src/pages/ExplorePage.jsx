@@ -1,6 +1,6 @@
 /**
  * Explore — the live map. Buses on North / North-West Delhi routes from /api/transit/buses/regional
- * (polled every 10 s), searchable by route; a selected route is drawn from its timetable stop
+ * (polled once per feed update), searchable by route; a selected route is drawn from its timetable stop
  * patterns and the map fits to it. A side panel (bottom sheet on phones) shows the overview, a route,
  * a bus or a stop. Selection lives in the URL (?route=&bus=&stop=) so Back works and links share.
  */
@@ -21,7 +21,7 @@ import useWalkingNavigation from '../hooks/useWalkingNavigation';
 import { useMediaQuery, useNow, useStore, useT } from '../hooks/useStores';
 import { createPersistentStore } from '../store/persistent';
 import {
-  getRegionalBuses, getRegionalStops, getRouteGeometry, getServiceAlerts, searchTransitStops,
+  getRegionalBuses, getRegionalStops, getRouteGeometry, getServiceAlerts, regionalPollDelay, searchTransitStops,
 } from '../api/client';
 import { visibleBuses } from '../utils/navigation';
 import { DEFAULT_REGION, feedState, groupStands, routeUnconfirmed } from '../utils/liveMap';
@@ -86,7 +86,8 @@ export default function ExplorePage() {
   }, [setParams]);
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  const busesQ = usePolling(`${region}|${route}`, s => getRegionalBuses({ region, routeNumber: route }, s), { interval: 10000 });
+  // Polls again just after the server's next feed snapshot is due (≈ every 11 s), else every 10 s.
+  const busesQ = usePolling(`${region}|${route}`, s => getRegionalBuses({ region, routeNumber: route }, s), { interval: 10000, nextDelay: regionalPollDelay });
   // Re-filtered against the ticking clock: a position older than 2 min disappears even if polling stalls.
   const allBuses = useMemo(() => visibleBuses(busesQ.data?.buses ?? [], route, now), [busesQ.data, route, now]);
   const liveIds = useMemo(() => new Set(allBuses.map(b => b.vehicleId)), [allBuses]);
