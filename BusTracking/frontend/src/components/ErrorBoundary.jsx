@@ -29,8 +29,9 @@ class Boundary extends Component {
   }
 }
 
-// Keyed by path, so navigating to another page clears a previous crash.
-export default function ErrorBoundary({ children }) {
+// Keyed by page (first path segment, or `resetKey`), so navigating to another page clears a previous
+// crash, while moving between a page's own sub-routes (/admin/map → /admin/routes) keeps its state.
+export default function ErrorBoundary({ children, resetKey }) {
   const { pathname } = useLocation();
-  return <Boundary key={pathname}>{children}</Boundary>;
+  return <Boundary key={resetKey ?? `/${pathname.split('/')[1]}`}>{children}</Boundary>;
 }

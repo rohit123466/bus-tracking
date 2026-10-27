@@ -49,6 +49,17 @@ public class DtcIngestionService {
         return t;
     });
     private final AtomicBoolean publishing = new AtomicBoolean();
+    /** Epoch seconds and size of the last batch published, for the admin feed-health view. */
+    private volatile long lastPublishedAt;
+    private volatile int lastPublishedCount;
+
+    public long lastPublishedAt() {
+        return lastPublishedAt;
+    }
+
+    public int lastPublishedCount() {
+        return lastPublishedCount;
+    }
 
     public DtcIngestionService(DtcApiClient dtcApiClient, BusLocationPublisher publisher,
                                RouteRepository routeRepository, TransitIndex transitIndex) {
@@ -108,6 +119,8 @@ public class DtcIngestionService {
                     publisher.publish(event);
                     if (event.getTimestamp() != null) publishedStamps.put(event.getVehicleId(), event.getTimestamp());
                 }
+                lastPublishedAt = System.currentTimeMillis() / 1000;
+                lastPublishedCount = events.size();
                 System.out.println("Published " + events.size() + " bus location events (North/North West Delhi routes)");
             } catch (Exception e) {
                 System.err.println("DTC publish failed: " + e.getMessage());

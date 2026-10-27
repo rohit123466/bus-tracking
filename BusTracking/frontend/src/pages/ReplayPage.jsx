@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import { getBusHistory } from '../api/client';
 import { vehicleIdIcon } from '../utils/leafletIcons';
@@ -6,7 +7,9 @@ import { vehicleIdIcon } from '../utils/leafletIcons';
 const DELHI_CENTER = [28.6139, 77.209];
 
 export default function ReplayPage() {
-  const [vehicleId, setVehicleId] = useState('');
+  // ?vehicle=… (e.g. from the admin live map) prefills and loads that vehicle.
+  const [searchParams] = useSearchParams();
+  const [vehicleId, setVehicleId] = useState(() => searchParams.get('vehicle') ?? '');
   const [points, setPoints] = useState([]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -14,7 +17,8 @@ export default function ReplayPage() {
   const intervalRef = useRef(null);
 
   const load = (e) => {
-    e.preventDefault();
+    e?.preventDefault();
+    if (!vehicleId.trim()) return;
     setError(null);
     setPlaying(false);
     getBusHistory(vehicleId.trim())
@@ -27,6 +31,12 @@ export default function ReplayPage() {
       })
       .catch(() => setError('Failed to load journey history.'));
   };
+
+  useEffect(() => {
+    if (searchParams.get('vehicle')) load();
+    // Only for the vehicle the page was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!playing) {

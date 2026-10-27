@@ -19,6 +19,7 @@ const ConductorPage = lazy(() => import('./pages/ConductorPage'));
 import './App.css';
 
 // Pages that lay out their own full-height panes (map + side panel) instead of scrolling as a whole.
+// The admin console (/admin/*) does too: sidebar plus its own scrolling body.
 const FILL_PAGES = new Set(['/', '/journey']);
 
 // The classic tool pages predate the theme tokens and assume light colours.
@@ -29,7 +30,7 @@ const Classic = ({ children }) => (
 function Shell() {
   const { pathname } = useLocation();
   return (
-    <AppShell fill={FILL_PAGES.has(pathname)}>
+    <AppShell fill={FILL_PAGES.has(pathname) || pathname.startsWith('/admin')}>
       <ErrorBoundary>
         <Suspense fallback={<p role="status" style={{ padding: 16 }}>Loading…</p>}>
           <Routes>
@@ -45,7 +46,7 @@ function Shell() {
             <Route path="/replay" element={<Classic><ReplayPage /></Classic>} />
             <Route path="/seats" element={<Classic><SeatAvailabilityPage /></Classic>} />
             <Route path="/conductor" element={<Classic><ConductorPage /></Classic>} />
-            <Route path="/admin" element={<Classic><AdminDashboardPage /></Classic>} />
+            <Route path="/admin/:section?" element={<AdminDashboardPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>

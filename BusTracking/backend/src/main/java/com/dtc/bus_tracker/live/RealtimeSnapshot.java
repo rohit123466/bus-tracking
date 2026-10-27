@@ -35,6 +35,9 @@ public class RealtimeSnapshot {
   private volatile Set<String> cancelled = Set.of();
   public volatile long fetchedAt;
   public volatile String feedError = "Live feed has not been received.";
+  /** Most recent fetch failure and when (epoch seconds); unlike feedError, kept after recovery. */
+  public volatile String lastError;
+  public volatile long lastErrorAt;
   /** Incremented every time positions or trip updates are replaced, so derived views rebuild. */
   private volatile long generation;
   private final List<Runnable> vehicleListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -76,6 +79,13 @@ public class RealtimeSnapshot {
       feedError = error;
       generation++;
     }
+  }
+
+  /** A poll failed: report it as the current feed problem and remember it for the admin console. */
+  public void recordFailure(String message) {
+    feedError = message;
+    lastError = message;
+    lastErrorAt = Instant.now().getEpochSecond();
   }
 
   private static final String NO_FRESH_VEHICLES = "DTC feed contains no fresh vehicle positions.";

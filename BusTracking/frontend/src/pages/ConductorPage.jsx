@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   advanceBus,
   apiErrorMessage,
@@ -40,9 +41,11 @@ const newRequestId = () =>
   globalThis.crypto?.randomUUID?.() || `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export default function ConductorPage() {
+  const [searchParams] = useSearchParams();
   const [token, setToken] = useState(getAdminToken());
   const [buses, setBuses] = useState([]);
-  const [busNumber, setBusNumber] = useState(null);
+  // ?bus=… (e.g. from the admin occupancy cards) opens that bus; otherwise the first one.
+  const [busNumber, setBusNumber] = useState(() => searchParams.get('bus'));
   const [tickets, setTickets] = useState([]);
   const [passengers, setPassengers] = useState([]);
   const [camera, setCamera] = useState(null);
@@ -93,7 +96,7 @@ export default function ConductorPage() {
     getTicketingBuses()
       .then((data) => {
         setBuses(data);
-        setBusNumber((current) => current || data[0]?.busNumber || null);
+        setBusNumber((current) => (current && data.some((b) => b.busNumber === current) ? current : data[0]?.busNumber || null));
       })
       .catch((err) => setPageError(apiErrorMessage(err, 'Failed to load buses.')));
     if (!busNumber) return;

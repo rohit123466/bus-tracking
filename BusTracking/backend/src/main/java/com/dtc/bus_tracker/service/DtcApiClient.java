@@ -43,9 +43,9 @@ public class DtcApiClient {
             return fetch();
         } catch (Exception failure) {
             // Never expose request URLs: the provider authenticates with a query parameter.
-            snapshot.feedError = failure instanceof FeedResponseException ? failure.getMessage() : failure instanceof com.google.protobuf.InvalidProtocolBufferException
+            snapshot.recordFailure(failure instanceof FeedResponseException ? failure.getMessage() : failure instanceof com.google.protobuf.InvalidProtocolBufferException
                     ? "DTC returned a malformed GTFS realtime feed."
-                    : "DTC feed request failed (" + failure.getClass().getSimpleName() + "). Check connectivity and credentials.";
+                    : "DTC feed request failed (" + failure.getClass().getSimpleName() + "). Check connectivity and credentials.");
             if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new IllegalStateException(snapshot.feedError);
         }

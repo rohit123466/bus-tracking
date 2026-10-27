@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
 import { getRouteDetail, searchRoutes } from '../api/client';
 import { busIcon, stopIconFor } from '../utils/leafletIcons';
@@ -8,7 +9,9 @@ import AccessibilityInfo from '../components/AccessibilityInfo';
 const DELHI_CENTER = [28.6139, 77.209];
 
 export default function RouteDetailPage() {
-  const [query, setQuery] = useState('');
+  // ?q=… (e.g. from the admin live map) prefills the search; the matches are listed to pick from.
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
   const [results, setResults] = useState([]);
   const [routeId, setRouteId] = useState(null);
   const [vehicleId, setVehicleId] = useState('');

@@ -3,7 +3,9 @@ package com.dtc.bus_tracker.service;
 import com.dtc.bus_tracker.dto.AdminStatsResponse;
 import com.dtc.bus_tracker.dto.BusLocationEvent;
 import com.dtc.bus_tracker.dto.RouteStat;
+import com.dtc.bus_tracker.entity.Route;
 import com.dtc.bus_tracker.repository.BusRepository;
+import com.dtc.bus_tracker.repository.RouteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,24 +20,23 @@ import java.util.stream.Collectors;
  * rather than a stored schedule, since this project has no per-trip
  * schedule-adherence tracking. "Delayed" here means "reporting a live
  * position but moving well below normal traffic speed" - a proxy for being
- * stuck, not a comparison against a timetable.
+ * stuck, not a comparison against a timetable. Thresholds live in
+ * {@link BusLiveStatus}.
  */
 @Service
 @RequiredArgsConstructor
 public class AdminStatsService {
 
-    private static final long STALE_AFTER_SECONDS = 120;
-    private static final double DELAYED_SPEED_KMH_THRESHOLD = 5.0;
-
     private final BusRepository busRepository;
     private final BusLocationStore busLocationStore;
+    private final RouteRepository routeRepository;
 
     public AdminStatsResponse getStats() {
         long nowEpochSeconds = System.currentTimeMillis() / 1000;
         Collection<BusLocationEvent> allLive = busLocationStore.findAll();
 
         List<BusLocationEvent> reporting = allLive.stream()
-                .filter(e -> e.getTimestamp() != null && (nowEpochSeconds - e.getTimestamp()) <= STALE_AFTER_SECONDS)
+                .filter(e -> BusLiveStatus.isReporting(e, nowEpochSeconds))
                 .toList();
 
         long totalRegisteredBuses = busRepository.count();
@@ -43,7 +44,7 @@ public class AdminStatsService {
         long offlineCount = Math.max(0, totalRegisteredBuses - liveCount);
 
         long delayedCount = reporting.stream()
-                .filter(e -> e.getSpeedKmh() != null && e.getSpeedKmh() < DELAYED_SPEED_KMH_THRESHOLD)
+                .filter(e -> BusLiveStatus.of(e, nowEpochSeconds) == BusLiveStatus.SLOW)
                 .count();
 
         double averageSpeed = reporting.stream()
@@ -56,8 +57,18 @@ public class AdminStatsService {
                 .filter(e -> e.getRouteId() != null)
                 .collect(Collectors.groupingBy(e -> e.getRouteId(), Collectors.counting()));
 
+        // routeCode is the GTFS route_id; the public route number is the route's name.
+        Map<String, String> routeNames = busesPerRoute.isEmpty() ? Map.of()
+                : routeRepository.findByRouteCodeIn(busesPerRoute.keySet()).stream()
+                        .filter(r -> r.getName() != null && !r.getName().isBlank())
+                        .collect(Collectors.toMap(Route::getRouteCode, Route::getName, (a, b) -> a));
+
         List<RouteStat> routeStats = busesPerRoute.entrySet().stream()
-                .map(e -> RouteStat.builder().routeCode(e.getKey()).activeBusCount(e.getValue()).build())
+                .map(e -> RouteStat.builder()
+                        .routeCode(e.getKey())
+                        .routeName(routeNames.get(e.getKey()))
+                        .activeBusCount(e.getValue())
+                        .build())
                 .sorted(Comparator.comparingLong((RouteStat r) -> r.getActiveBusCount()).reversed())
                 .toList();
 
