@@ -89,10 +89,12 @@ public class TransitController {
       @RequestParam double longitude,
       @RequestParam(defaultValue = "1000") double radiusMeters,
       @RequestParam(defaultValue = "5") int limit,
-      @RequestParam(defaultValue = "ANY") String region) {
+      @RequestParam(defaultValue = "ANY") String region,
+      @RequestParam(defaultValue = "") String routeNumber) {
     coordinates(latitude, longitude);
+    query(routeNumber);
     return regions.nearbyStops(
-        latitude, longitude, radiusMeters, limit, RegionService.Filter.parse(region));
+        latitude, longitude, radiusMeters, limit, RegionService.Filter.parse(region), routeNumber);
   }
 
   @GetMapping("/buses/live")
