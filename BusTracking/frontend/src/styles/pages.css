@@ -141,6 +141,16 @@ div.arr-row { border-bottom: 1px solid var(--border); }
 .idle-routes { margin-top: 10px; font-size: 0.875rem; color: var(--text-2); }
 .idle-routes summary { cursor: pointer; padding: 6px 0; }
 
+/* Side-panel sections may shrink below a truncated line's full width (e.g. a long "Next: …" stop
+   name), which would otherwise widen the whole panel and push the ETAs out of view. */
+.side-body .stack > * { min-width: 0; }
+
+/* Explore route panel: route stops near the user, each expandable to its next buses. */
+.near-stand > summary { list-style: none; }
+.near-stand > summary::-webkit-details-marker { display: none; }
+.near-stand-chev { display: inline-flex; transition: transform 0.15s; }
+.near-stand[open] .near-stand-chev { transform: rotate(180deg); }
+
 .walk-box {
   padding: 10px 12px;
   border-radius: var(--radius-s);

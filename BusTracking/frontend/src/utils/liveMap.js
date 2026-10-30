@@ -1,5 +1,6 @@
 // Live Map helpers: region filter options, GPS freshness and ETA labels.
 // Pure functions so they can be unit-tested with `node --test`.
+import { metresBetween } from './geo.js';
 
 // Every option hits /api/transit/buses/regional, which only returns buses inside the area.
 export const REGION_OPTIONS = [
@@ -56,13 +57,6 @@ export const ETA_BASIS_TEXT = {
   LEARNED_ROUTE_ESTIMATE: 'based on how long a bus on this route recently took',
   STOP_CHAIN_ESTIMATE: 'rough estimate from current speed',
 };
-
-function metresBetween(a, b) {
-  const rad = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
-  return 2 * 6371000 * Math.asin(Math.sqrt(h));
-}
 
 /** Same-name stops closer than this are one bus stand (usually one stop per side of the road). */
 export const STAND_MERGE_METERS = 150;
@@ -266,4 +260,104 @@ export function approachingBuses(stops) {
     }
   }
   return [...byVehicle.values()].sort((a, b) => (a.etaMinutes ?? Infinity) - (b.etaMinutes ?? Infinity));
+}
+
+/** A nearest route stop further than this (straight line) is still shown, but flagged as far. */
+export const FAR_STOP_METERS = 2000;
+/** Walking pace for straight-line estimates: 80 m/min ≈ 4.8 km/h. */
+export const WALK_METERS_PER_MIN = 80;
+
+/** Straight-line walking estimate in whole minutes (at least 1); null without a distance. */
+export function walkMinutesFor(meters) {
+  if (meters == null || !Number.isFinite(meters)) return null;
+  return Math.max(1, Math.round(meters / WALK_METERS_PER_MIN));
+}
+
+/**
+ * The stop of a route geometry nearest to `location`, as { stop, distanceMeters } (straight line),
+ * or null without stops or a fix. Stops without valid coordinates are skipped.
+ */
+export function nearestRouteStop(geometry, location) {
+  if (!location) return null;
+  let best = null;
+  for (const stop of geometry?.stops ?? []) {
+    if (!Number.isFinite(stop.lat) || !Number.isFinite(stop.lng)) continue;
+    const d = metresBetween(location, stop);
+    if (!best || d < best.distanceMeters) best = { stop, distanceMeters: d };
+  }
+  return best;
+}
+
+/** Route stops this close to the user are each listed with their next buses. */
+export const NEAR_ROUTE_METERS = 1500;
+
+/**
+ * The stops of a route geometry within `radiusMeters` of `location`, merged into stands (see
+ * groupStands), nearest first. Empty without a fix.
+ */
+export function routeStandsNear(geometry, location, radiusMeters = NEAR_ROUTE_METERS) {
+  if (!location) return [];
+  const near = (geometry?.stops ?? [])
+    .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lng))
+    .map(s => ({ s, d: metresBetween(location, s) }))
+    .filter(x => x.d <= radiusMeters)
+    .sort((a, b) => a.d - b.d)
+    .map(x => x.s);
+  return groupStands(near);
+}
+
+/**
+ * Each stand with `arrivals`: one route's buses heading to any of its stops in a
+ * /stops/nearby-regional answer (see routeArrivals), or null when the answer has none of its
+ * stops — they are outside the area live estimates cover.
+ */
+export function withRouteArrivals(stands, regionalStops, route, now = Date.now() / 1000) {
+  const byId = new Map((regionalStops ?? []).map(s => [s.id, s]));
+  return (stands ?? []).map(stand => {
+    const found = stand.members.map(m => byId.get(m.id)).filter(Boolean);
+    if (!found.length) return { ...stand, arrivals: null };
+    // One entry per bus: its soonest time at any stop of the stand.
+    const byVehicle = new Map();
+    for (const u of found.flatMap(s => s.upcoming ?? [])) {
+      const prev = byVehicle.get(u.vehicleId);
+      if (!prev || (u.etaMinutes ?? Infinity) < (prev.etaMinutes ?? Infinity)) byVehicle.set(u.vehicleId, u);
+    }
+    return { ...stand, arrivals: routeArrivals([...byVehicle.values()], route, now) };
+  });
+}
+
+/**
+ * Where the patterns of a PATTERNS geometry that visit any of `stopIds` are heading, each place
+ * once ("Towards …"). Empty for STOPS_ONLY geometry, which has no directions.
+ */
+export function towardsAt(geometry, stopIds) {
+  if (geometry?.source !== 'PATTERNS') return [];
+  const ids = new Set(stopIds);
+  const serving = (geometry.patterns ?? []).filter(p => (p.stops ?? []).some(s => ids.has(s.id)));
+  return [...new Set(serving.map(p => p.towards).filter(Boolean))];
+}
+
+/**
+ * One route's buses heading to a stand, soonest first. Buses whose GPS fix has gone stale are
+ * dropped; ones without an estimate stay, last. The backend only lists buses that have not yet
+ * passed the stop, so no direction check is needed here.
+ */
+export function routeArrivals(upcoming, route, now = Date.now() / 1000) {
+  const wanted = (route ?? '').trim().toUpperCase();
+  return sortByEta((upcoming ?? []).filter(u =>
+    String(u.routeNumber ?? '').toUpperCase() === wanted && etaStatus(u, now) !== 'stale'));
+}
+
+/** Spare minutes wanted between reaching the stop and the bus arriving before "you can make it". */
+export const CATCH_MARGIN_MIN = 2;
+
+/**
+ * Whether the user can reach the stop before a bus: 'make' (with CATCH_MARGIN_MIN to spare),
+ * 'leave-now' (only just), 'miss', or null when either time is unknown.
+ */
+export function catchVerdict(etaMinutes, walkMinutes) {
+  if (!Number.isFinite(etaMinutes) || !Number.isFinite(walkMinutes)) return null;
+  const spare = etaMinutes - walkMinutes;
+  if (spare >= CATCH_MARGIN_MIN) return 'make';
+  return spare >= 0 ? 'leave-now' : 'miss';
 }

@@ -273,9 +273,14 @@ export function regionalPollDelay(data, fallback = 10000) {
   return Math.min(15000, Math.max(2000, hint + 1000));
 }
 
-/** Nearby stops inside the area with every tracked upcoming bus and its labelled ETA. */
-export const getRegionalStops = ({ lat, lng, radiusMeters = 1000, limit = 60, region = 'ANY' }, signal) =>
-  transitGet('/stops/nearby-regional', { latitude: lat, longitude: lng, radiusMeters, limit, region }, signal);
+/**
+ * Nearby stops inside the area with every tracked upcoming bus and its labelled ETA. With
+ * `routeNumber`, only that route's stops and arrivals (an older backend ignores it and sends all).
+ */
+export const getRegionalStops = ({ lat, lng, radiusMeters = 1000, limit = 60, region = 'ANY', routeNumber = '' }, signal) =>
+  transitGet('/stops/nearby-regional', {
+    latitude: lat, longitude: lng, radiusMeters, limit, region, ...(routeNumber && { routeNumber }),
+  }, signal);
 
 export const searchTransitRoutes = (query, signal) => transitGet('/routes/search', { query }, signal);
 

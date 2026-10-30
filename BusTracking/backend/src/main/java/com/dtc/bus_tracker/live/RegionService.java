@@ -892,6 +892,16 @@ public class RegionService {
 
   public RegionalStops nearbyStops(
       double lat, double lng, double radiusMeters, int limit, Filter filter) {
+    return nearbyStops(lat, lng, radiusMeters, limit, filter, "");
+  }
+
+  /**
+   * As above; a non-blank {@code routeNumber} keeps only the stops that route serves, each with
+   * only that route's arrivals, so the 60-stop cap is not used up by stops of other routes.
+   */
+  public RegionalStops nearbyStops(
+      double lat, double lng, double radiusMeters, int limit, Filter filter, String routeNumber) {
+    String only = routeNumber == null ? "" : routeNumber.trim();
     double radius = Math.max(100, Math.min(5000, radiusMeters));
     // Up to 60 stops: within 1 km of a busy junction there are often 30+ (one per road side).
     int cap = Math.max(1, Math.min(limit, 60));
@@ -910,6 +920,7 @@ public class RegionService {
               .filter(Objects::nonNull)
               .map(TransitIndex.Route::number)
               .filter(n -> n != null && eligible.contains(n))
+              .filter(n -> only.isEmpty() || n.equalsIgnoreCase(only))
               .distinct()
               .sorted()
               .toList();

@@ -331,6 +331,23 @@ class RegionServiceTest {
     assertEquals(List.of("104", "300"), north.stops().get(0).routeNumbers());
   }
 
+  @Test
+  void nearbyStopsCanBeNarrowedToOneRoute() {
+    feed(vehicle("v100", "rA", "tA", S, 1, 10)); // route 100, heading to Rohini
+    var all = regions.nearbyStops(NW[0], NW[1], 500, 5, RegionService.Filter.ANY);
+    assertTrue(all.stops().stream().filter(x -> x.id().equals("nw")).findFirst().orElseThrow()
+        .upcoming().stream().anyMatch(u -> u.routeNumber().equals("100")));
+    var only = regions.nearbyStops(NW[0], NW[1], 500, 5, RegionService.Filter.ANY, " 300 ");
+    var stop = only.stops().stream().filter(x -> x.id().equals("nw")).findFirst().orElseThrow();
+    assertEquals(List.of("300"), stop.routeNumbers());
+    assertTrue(stop.upcoming().stream().allMatch(u -> u.routeNumber().equals("300")));
+    // A route that doesn't stop here leaves no stops; blank means every route, as before.
+    assertTrue(regions.nearbyStops(NW[0], NW[1], 500, 5, RegionService.Filter.ANY, "999").stops().isEmpty());
+    assertEquals(
+        regions.nearbyStops(NW[0], NW[1], 500, 5, RegionService.Filter.ANY).stops().size(),
+        regions.nearbyStops(NW[0], NW[1], 500, 5, RegionService.Filter.ANY, "").stops().size());
+  }
+
   /**
    * Route 500's static GTFS lists only Saket, but its buses are seen driving due north along
    * 77.10 through Rohini (one poll per 10 s, ~111 m per poll), passing L1 then L2.

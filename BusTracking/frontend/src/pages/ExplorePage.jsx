@@ -21,10 +21,12 @@ import useWalkingNavigation from '../hooks/useWalkingNavigation';
 import { useMediaQuery, useNow, useStore, useT } from '../hooks/useStores';
 import { createPersistentStore } from '../store/persistent';
 import {
-  getRegionalBuses, getRegionalStops, getRouteGeometry, getServiceAlerts, regionalPollDelay, searchTransitStops,
+  getRegionalBuses, getRegionalStops, getRouteGeometry, getServiceAlerts, getStopArrivals, regionalPollDelay, searchTransitStops,
 } from '../api/client';
 import { visibleBuses } from '../utils/navigation';
-import { DEFAULT_REGION, feedState, groupStands, routeUnconfirmed } from '../utils/liveMap';
+import {
+  DEFAULT_REGION, feedState, groupStands, NEAR_ROUTE_METERS, nearestRouteStop, routeStandsNear, routeUnconfirmed,
+} from '../utils/liveMap';
 import { addRecent } from '../store/favourites';
 import { themePreference } from '../store/theme';
 import { ageText, clockText, plural } from '../utils/format';
@@ -108,7 +110,7 @@ export default function ExplorePage() {
   // Rounded to ~100 m so walking around doesn't refetch on every GPS update.
   const here = gps.location;
   const nearKey = here && !route ? `${here.lat.toFixed(3)},${here.lng.toFixed(3)}|${region}` : null;
-  const nearQ = usePolling(nearKey, s => getRegionalStops({ lat: here.lat, lng: here.lng, radiusMeters: 800, limit: 40, region }, s), { interval: 30000 });
+  const nearQ = usePolling(nearKey, s => getRegionalStops({ lat: here.lat, lng: here.lng, radiusMeters: 2000, limit: 60, region }, s), { interval: 30000 });
   const stands = useMemo(() => groupStands(nearQ.data?.stops).slice(0, 6), [nearQ.data]);
 
   // Resolve ?stop= links (the panel normally hands over the stop object directly).
@@ -127,6 +129,29 @@ export default function ExplorePage() {
   const [lastBus, setLastBus] = useState(null);
   useEffect(() => { if (liveBus) setLastBus(liveBus); }, [liveBus]);
   const bus = liveBus ?? (lastBus?.vehicleId === busId ? lastBus : null);
+
+  // The selected route's stops near the user, re-picked only when the fix moves ~100 m. Their next
+  // buses are polled while the route panel shows, at about the live feed's cadence.
+  const roughLat = here ? Number(here.lat.toFixed(3)) : null;
+  const roughLng = here ? Number(here.lng.toFixed(3)) : null;
+  const nearest = useMemo(
+    () => (route && roughLat != null ? nearestRouteStop(geometry, { lat: roughLat, lng: roughLng }) : null),
+    [route, geometry, roughLat, roughLng],
+  );
+  const nearStands = useMemo(
+    () => (route && roughLat != null ? routeStandsNear(geometry, { lat: roughLat, lng: roughLng }) : []),
+    [route, geometry, roughLat, roughLng],
+  );
+  const routePanelShown = route && !(busId && bus) && !stop;
+  // One request for every stand within 1.5 km, narrowed to this route; 100 m wider so a stop right
+  // at the edge isn't lost to rounding.
+  const nearStandsKey = nearStands.length && routePanelShown ? `nearRoute|${route}|${roughLat},${roughLng}` : null;
+  const nearStandsQ = usePolling(nearStandsKey, s => getRegionalStops({
+    lat: roughLat, lng: roughLng, radiusMeters: NEAR_ROUTE_METERS + 100, limit: 60, routeNumber: route,
+  }, s), { interval: 15000 });
+  // No stop that close: only the nearest one, fetched on its own.
+  const nearestKey = nearest && !nearStands.length && routePanelShown ? `nearest|${route}|${nearest.stop.id}` : null;
+  const nearestQ = usePolling(nearestKey, s => getStopArrivals(nearest.stop, s), { interval: 15000 });
 
   const nav = useWalkingNavigation(noop, gps.location, stop);
 
@@ -185,6 +210,8 @@ export default function ExplorePage() {
         busesQuery={busesQ} geometryQuery={geometryQ} now={now}
         onSelectBus={selectBus} onClose={() => select({ route: '', bus: '' })}
         onFit={routePoints.length > 1 ? fitRoute : null}
+        gps={gps} nearest={nearest} nearestQuery={nearestQ} nearStands={nearStands} nearStandsQuery={nearStandsQ}
+        liveIds={liveIds} onSelectStop={selectStop}
       />
     );
   } else {
@@ -233,9 +260,10 @@ export default function ExplorePage() {
       <section className="map-wrap" aria-label="Map of live buses">
         <BaseMap ref={setMap}>
           <ViewTracker onChange={setView} />
-          <RouteLayer geometry={route ? geometry : null} colors={colors} selectedStopId={stop?.id} onSelectStop={selectStop} />
+          <RouteLayer geometry={route ? geometry : null} colors={colors} selectedStopId={(stop ?? nearest?.stop)?.id} onSelectStop={selectStop} />
           {!route && <StopPins stops={stands} selectedId={stop?.id} onSelect={selectStop} />}
-          <SelectedStop stop={stop} />
+          {/* With no stop selected, the route's stop nearest the user is highlighted instead. */}
+          <SelectedStop stop={stop ?? nearest?.stop} />
           <WalkLine walk={nav.walk} from={gps.location} colors={colors} />
           <UserMarker location={gps.location} />
           <BusLayer buses={buses} now={now} view={view} selectedId={busId} onSelect={selectBus} colors={colors} />
