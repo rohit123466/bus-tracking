@@ -4,6 +4,7 @@ import Icon from '../../ui/Icon';
 import { ErrorState, Notice } from '../../ui/States';
 import Sparkline from '../Sparkline';
 import { Tip, UpdatedAgo } from '../AdminWidgets';
+import NotRespondingCards from '../NotRespondingCards';
 import { sectionPath, useAdmin } from '../adminContext';
 import { useNow } from '../../../hooks/useStores';
 import { countStatuses, routeLabel, STATUS_META, trend } from '../../../utils/admin';
@@ -139,6 +140,8 @@ export default function OverviewSection() {
                 </ul>
               )}
             </section>
+
+            <NotRespondingCards />
 
             <section className="panel" aria-labelledby="ov-mix">
               <div className="panel-head">

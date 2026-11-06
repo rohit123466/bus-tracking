@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   countBySeverity, countdownText, countStatuses, eventFromFleetRow, liveStatus, loadTone, loginErrorMessage,
-  mergeHistory, mergePositions, pushSample, sampleFromStats, searchItems, sortBy, sparklinePath, toCsv, tokenExpiry,
-  trend, visibleBuses, STALE_AFTER_SECONDS, SLOW_SPEED_KMH,
+  mergeHistory, mergePositions, pushSample, sampleFromStats, searchItems, sortBy, sparklinePath, splitDiagnoses, toCsv,
+  tokenExpiry, trend, visibleBuses, REASON_TONE, STALE_AFTER_SECONDS, SLOW_SPEED_KMH,
 } from '../src/utils/admin.js';
 
 const NOW = 1_800_000_000;
@@ -117,4 +117,21 @@ test('admin misc: occupancy tone, severity counts, palette search', () => {
   assert.deepEqual(searchItems(items, 'dl1').map(i => i.label), ['DL1PC0534']);
   assert.deepEqual(searchItems(items, '1052').map(i => i.label), ['Route 534']);
   assert.equal(searchItems(items, '', 2).length, 2);
+});
+
+// ── Route diagnosis ─────────────────────────────────────────────────────────
+test('route diagnosis: every backend reason has a tone; buses split by category in order', () => {
+  // Must list every RouteDiagnosisService.Reason.
+  assert.deepEqual(Object.keys(REASON_TONE).sort(), [
+    'FEED_OUTAGE', 'GPS_LOST_WHILE_MOVING', 'IN_MAINTENANCE', 'NOT_OUT_TODAY', 'SIGNAL_LOSS',
+    'STOPPED_AT_TERMINAL', 'STOPPED_ON_ROUTE', 'TRIP_CANCELLED', 'WITHDRAWN',
+  ]);
+  const { silent, notSeen } = splitDiagnoses([
+    { vehicleId: 'A', category: 'SILENT_TODAY' },
+    { vehicleId: 'B', category: 'NOT_SEEN_TODAY' },
+    { vehicleId: 'C', category: 'SILENT_TODAY' },
+  ]);
+  assert.deepEqual(silent.map(b => b.vehicleId), ['A', 'C']);
+  assert.deepEqual(notSeen.map(b => b.vehicleId), ['B']);
+  assert.deepEqual(splitDiagnoses(undefined), { silent: [], notSeen: [] });
 });
