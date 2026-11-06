@@ -6,6 +6,7 @@ import { createPersistentStore } from '../store/persistent.js';
 const en = {
   'skip': 'Skip to content',
   'nav.explore': 'Explore',
+  'nav.stands': 'Bus stands',
   'nav.nearby': 'Nearby',
   'nav.plan': 'Plan',
   'nav.saved': 'Saved',
@@ -24,6 +25,7 @@ const en = {
 const hi = {
   'skip': 'सामग्री पर जाएँ',
   'nav.explore': 'नक्शा',
+  'nav.stands': 'बस स्टैंड',
   'nav.nearby': 'आस-पास',
   'nav.plan': 'यात्रा योजना',
   'nav.saved': 'सहेजे गए',

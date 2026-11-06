@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import NotFoundPage from './pages/NotFoundPage';
 const ExplorePage = lazy(() => import('./pages/ExplorePage'));
 const NearbyPage = lazy(() => import('./pages/NearbyPage'));
+const StandsPage = lazy(() => import('./pages/StandsPage'));
 const JourneyPage = lazy(() => import('./pages/JourneyPage'));
 const SavedPage = lazy(() => import('./pages/SavedPage'));
 const BusSearchPage = lazy(() => import('./pages/BusSearchPage'));
@@ -36,6 +37,7 @@ function Shell() {
           <Routes>
             <Route path="/" element={<ExplorePage />} />
             <Route path="/nearby" element={<NearbyPage />} />
+            <Route path="/stands" element={<StandsPage />} />
             <Route path="/stops" element={<Navigate to="/nearby" replace />} />
             <Route path="/journey" element={<JourneyPage />} />
             <Route path="/saved" element={<SavedPage />} />

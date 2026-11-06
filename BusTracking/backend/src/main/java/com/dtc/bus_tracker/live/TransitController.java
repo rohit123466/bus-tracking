@@ -24,6 +24,8 @@ public class TransitController {
   @Autowired private RegionalBusesCache regionalCache;
   @Autowired private RouteLearner learner;
   @Autowired private JourneyService journeys;
+  @Autowired private StandService stands;
+  @Autowired private StandRouteService standRoutes;
 
   public TransitController(
       TransitIndex index,
@@ -213,6 +215,70 @@ public class TransitController {
   @GetMapping("/stops/{stopId}/arrivals")
   public LiveTransitService.Arrivals arrivals(@PathVariable String stopId) {
     return transit.arrivals(stopId);
+  }
+
+  /**
+   * Bus stands whose name matches {@code query} (partial, case-insensitive, any word order), each
+   * stand once: same-name stops close together are merged. Unlike {@code /stops/search}, which
+   * lists every GTFS stop (one per side of the road), this is meant for autocomplete.
+   */
+  @GetMapping("/stands/search")
+  public List<StandService.Stand> standSearch(
+      @RequestParam(defaultValue = "") String query,
+      @RequestParam(defaultValue = "10") int limit) {
+    query(query);
+    return stands.search(query, limit);
+  }
+
+  /**
+   * Buses heading to the stand that contains {@code stopId}: live GPS positions with ETA,
+   * distance, destination and status, plus timetable departures (labelled SCHEDULED) for routes
+   * with no live bus. {@value #NEXT_UPDATE_HEADER} says when the next feed snapshot is expected.
+   */
+  @GetMapping("/stands/{stopId}/arrivals")
+  public ResponseEntity<StandService.StandArrivals> standArrivals(@PathVariable String stopId) {
+    query(stopId);
+    return ResponseEntity.ok()
+        .cacheControl(CacheControl.noStore())
+        .header(NEXT_UPDATE_HEADER, String.valueOf(regionalCache.nextUpdateInMs()))
+        .body(stands.arrivals(stopId));
+  }
+
+  /**
+   * Every route whose timetable stop sequence calls at the pick-up stand ({@code from}, any stop ID
+   * of it) and later at the destination stand ({@code to}), with the stops between, scheduled ride
+   * time, distance and how many of its buses are on the live feed. {@code walkMeters} (0–500) also
+   * admits stops that close to either stand.
+   */
+  @GetMapping("/stands/routes")
+  public StandRouteService.RouteSearch standRoutes(
+      @RequestParam(defaultValue = "") String from,
+      @RequestParam(defaultValue = "") String to,
+      @RequestParam(defaultValue = "0") double walkMeters) {
+    if (from.isBlank())
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select a pick-up bus stand");
+    if (to.isBlank())
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select a destination bus stand");
+    query(from);
+    query(to);
+    return standRoutes.search(from.trim(), to.trim(), walkMeters);
+  }
+
+  /**
+   * Buses on the live feed mapped to the given route IDs (comma-separated, from a
+   * {@code /stands/routes} match), with their position, next stop and, when it can be estimated,
+   * their arrival at {@code pickup}.
+   */
+  @GetMapping("/stands/routes/live")
+  public ResponseEntity<StandRouteService.RouteLive> standRouteLive(
+      @RequestParam String pickup, @RequestParam String routeIds) {
+    query(pickup);
+    query(routeIds);
+    var ids = Arrays.stream(routeIds.split(",")).map(String::trim).filter(s -> !s.isEmpty()).limit(10).toList();
+    return ResponseEntity.ok()
+        .cacheControl(CacheControl.noStore())
+        .header(NEXT_UPDATE_HEADER, String.valueOf(regionalCache.nextUpdateInMs()))
+        .body(standRoutes.live(pickup.trim(), ids));
   }
 
   @GetMapping("/routes/alternatives")

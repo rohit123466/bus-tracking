@@ -8,6 +8,7 @@ import { reportBrowserOnline } from '../api/connection';
 
 const PRIMARY = [
   { to: '/', label: 'nav.explore', icon: 'map', end: true },
+  { to: '/stands', label: 'nav.stands', icon: 'search' },
   { to: '/nearby', label: 'nav.nearby', icon: 'pin' },
   { to: '/journey', label: 'nav.plan', icon: 'route' },
   { to: '/saved', label: 'nav.saved', icon: 'star' },
