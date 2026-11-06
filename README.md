@@ -107,4 +107,5 @@ Render, from [render.yaml](render.yaml): see [BusTracking/DEPLOY.md](BusTracking
 - [LIVE_TRANSIT.md](BusTracking/LIVE_TRANSIT.md): live transit APIs, route matching, arrival prediction, data limits
 - [TICKETING.md](BusTracking/TICKETING.md): seat map and segment ticketing (demo)
 - [VERIFICATION.md](BusTracking/VERIFICATION.md): verification log
+- [INTERVIEW_PREP.md](BusTracking/INTERVIEW_PREP.md): interview questions and answers on the architecture, system design, database and backend, with diagrams
 - [Frontend README](BusTracking/frontend/README.md)
