@@ -185,6 +185,9 @@ export function StopPanel({ stop, now, onBack, backLabel, onSelectBus, onSelectR
           <Link className="btn btn-sm" to={`/journey?to=${encodeURIComponent(placeParam({ ...stop, label: stop.name }))}`}>
             <Icon name="route" size={16} /> Plan a trip to here
           </Link>
+          <Link className="btn btn-sm" to={`/stands?stand=${encodeURIComponent(stop.id)}`}>
+            <Icon name="list" size={16} /> Arrivals board
+          </Link>
         </div>
       </section>
     </div>

@@ -262,13 +262,45 @@ export const transitGet = (path, params = {}, signal) => sharedGet(`/transit${pa
 // Answer -> ms until the server expects its next feed snapshot (X-Next-Update-In), if it said.
 const nextUpdateHints = new WeakMap();
 
+/** The answer's data, remembering its X-Next-Update-In hint for regionalPollDelay. */
+function withUpdateHint(res) {
+  const hint = Number(res.headers?.['x-next-update-in']);
+  if (res.data && typeof res.data === 'object' && Number.isFinite(hint)) nextUpdateHints.set(res.data, hint);
+  return res.data;
+}
+
 /** Live buses on North / North-West routes currently inside the area (optionally one route). */
 export const getRegionalBuses = ({ region = 'ANY', routeNumber = '' } = {}, signal) =>
-  sharedResponse('/transit/buses/regional', { region, routeNumber }, signal).then(res => {
-    const hint = Number(res.headers?.['x-next-update-in']);
-    if (res.data && typeof res.data === 'object' && Number.isFinite(hint)) nextUpdateHints.set(res.data, hint);
-    return res.data;
-  });
+  sharedResponse('/transit/buses/regional', { region, routeNumber }, signal).then(withUpdateHint);
+
+/**
+ * Bus stands whose name matches `query` (partial, any case), each stand once:
+ * [{ id, name, lat, lng, stopIds, routeNumbers, routeCount }].
+ */
+export const searchStands = (query, signal) => transitGet('/stands/search', { query, limit: 8 }, signal);
+
+/**
+ * Buses heading to the stand containing `stopId`: live GPS arrivals with ETA, distance,
+ * destination and status, plus timetable departures labelled SCHEDULED. Poll with
+ * regionalPollDelay(data, 12000): the answer carries the server's next-snapshot hint.
+ */
+export const getStandArrivals = (stopId, signal) =>
+  sharedResponse(`/transit/stands/${encodeURIComponent(stopId)}/arrivals`, {}, signal).then(withUpdateHint);
+
+/**
+ * Every route whose timetable stop order runs from the stand containing `from` to the stand
+ * containing `to`: { status, message, from, to, routes: [{ routeNumber, routeIds, stops, ... }] }.
+ * `walkMeters` (0–500) also admits stops that close to either stand.
+ */
+export const findStandRoutes = ({ from, to, walkMeters = 0 }, signal) =>
+  transitGet('/stands/routes', { from, to, walkMeters }, signal);
+
+/**
+ * Live buses on one matched route (its route IDs), with position, next stop and ETA at the pick-up
+ * stop where one can be estimated. Poll with regionalPollDelay(data, 12000).
+ */
+export const getStandRouteLive = ({ pickup, routeIds }, signal) =>
+  sharedResponse('/transit/stands/routes/live', { pickup, routeIds: routeIds.join(',') }, signal).then(withUpdateHint);
 
 /**
  * When to poll /buses/regional again: just after the server's next feed snapshot is due (it

@@ -138,6 +138,12 @@ public class TransitIndex {
   public final Map<String, Trip> trips = new HashMap<>();
   public final Map<String, List<Point>> shapes = new HashMap<>();
   public final Map<String, Set<String>> routesAtStop = new HashMap<>();
+  /**
+   * GTFS route_id -> where its buses are heading, as published: the part after " to " of
+   * route_desc ("Rohini Sec 22 Terminal to Azadpur Terminal"), else the first trip's
+   * trip_headsign. Absent when the feed gives neither.
+   */
+  public final Map<String, String> routeDestinations = new HashMap<>();
   private final Map<String, List<Stop>> cells = new HashMap<>();
 
   /** Administrative areas used by the Live Map route filter. */
@@ -196,6 +202,8 @@ public class TransitIndex {
           routes.put(
               r.get("route_id"),
               new Route(r.get("route_id"), number, name, direction, shortName.isEmpty()));
+          String destination = destinationOf(r.getOrDefault("route_desc", ""));
+          if (destination != null) routeDestinations.put(r.get("route_id"), destination);
         });
     files.put(
         "stops.txt",
@@ -209,15 +217,18 @@ public class TransitIndex {
         });
     files.put(
         "trips.txt",
-        r ->
-            trips.put(
-                r.get("trip_id"),
-                new Trip(
-                    r.get("trip_id"),
-                    r.get("route_id"),
-                    r.getOrDefault("direction_id", ""),
-                    r.getOrDefault("shape_id", ""),
-                    List.of())));
+        r -> {
+          trips.put(
+              r.get("trip_id"),
+              new Trip(
+                  r.get("trip_id"),
+                  r.get("route_id"),
+                  r.getOrDefault("direction_id", ""),
+                  r.getOrDefault("shape_id", ""),
+                  List.of()));
+          String headsign = r.getOrDefault("trip_headsign", "");
+          if (!headsign.isBlank()) routeDestinations.putIfAbsent(r.get("route_id"), headsign);
+        });
     Map<String, Integer> stopIndex = new HashMap<>();
     List<String> stopIds = new ArrayList<>();
     Map<String, RowBuffer> pending = new HashMap<>();
@@ -343,6 +354,16 @@ public class TransitIndex {
   public static String direction(String routeName) {
     String name = routeName == null ? "" : routeName.trim().toUpperCase(Locale.ROOT);
     return name.matches(".*DOWN[0-9]*") ? "DOWN" : name.matches(".*UP[0-9]*") ? "UP" : "";
+  }
+
+  /** "Rohini Sec 22 Terminal to Azadpur Terminal" -> "Azadpur Terminal"; null without " to ". */
+  public static String destinationOf(String routeDescription) {
+    if (routeDescription == null) return null;
+    String desc = routeDescription.trim();
+    int at = desc.toLowerCase(Locale.ROOT).lastIndexOf(" to ");
+    if (at < 0) return null;
+    String destination = desc.substring(at + 4).trim();
+    return destination.isEmpty() ? null : destination;
   }
 
   public static int seconds(String raw) {
