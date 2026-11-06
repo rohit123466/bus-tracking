@@ -140,6 +140,14 @@ export async function getAllAdminBuses(params, signal, maxPages = 20) {
 
 export const getFeedHealth = (signal) => client.get('/admin/feed-health', { signal }).then((res) => res.data);
 
+/** Routes with buses that went silent today, most first: { routes, totalRoutes, generatedAt, serviceDayStart }. */
+export const getNotRespondingRoutes = (limit, signal) =>
+  client.get('/admin/routes/not-responding', { params: { limit }, signal }).then((res) => res.data);
+
+/** Why each non-reporting bus on one route (GTFS route_id) is silent; see RouteDiagnosisService.RouteReport. */
+export const getRouteDiagnosis = (routeCode, signal) =>
+  client.get(`/admin/routes/${encodeURIComponent(routeCode)}/diagnosis`, { signal }).then((res) => res.data);
+
 // Spring Boot actuator lives outside /api and outside its CORS rules, so this may fail in a browser
 // on another origin. Plain axios: such a failure must not mark the whole API as unreachable.
 export const getActuatorHealth = (signal) =>

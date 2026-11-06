@@ -325,6 +325,50 @@
 .mix-list { display: grid; gap: 6px; font-size: 0.875rem; }
 .mix-list li { display: flex; align-items: center; gap: 8px; }
 .mix-list strong { margin-left: auto; font-variant-numeric: tabular-nums; }
+.bar-row-btn {
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bar-danger > span { background: var(--danger); }
+
+/* ── Route diagnosis dialog ── */
+.diag {
+  width: min(760px, calc(100% - 32px));
+  max-height: calc(100% - 48px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+}
+.diag::backdrop { background: var(--scrim); }
+.diag-body { padding: 16px; }
+.diag-head { display: flex; align-items: center; gap: 12px; }
+.diag-head h2 { flex: 1; min-width: 0; font-size: 1.125rem; }
+.diag-summary { margin: 0; line-height: 1.5; }
+.diag-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.diag-counts > div { padding: 10px 12px; border-radius: var(--radius-s); background: var(--surface-2); }
+.diag-counts dd { margin: 2px 0 0; font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.diag-reasons { display: flex; flex-wrap: wrap; gap: 6px; }
+.diag-reasons strong { font-variant-numeric: tabular-nums; }
+.diag-h { font-size: 1rem; margin: 0; }
+.diag-table th[scope='row'] { font-weight: 600; }
+.diag-table td, .diag-table th { vertical-align: top; }
+.diag-sub { display: block; margin-top: 4px; font-weight: 400; white-space: normal; }
+.diag-details summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.diag-notseen { display: grid; gap: 6px; margin-top: 8px; }
+.diag-notseen li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.diag-notchecked { margin: 6px 0 0; padding-left: 1.1em; display: grid; gap: 4px; }
 
 /* ── Tables ── */
 .table-wrap { overflow-x: auto; }

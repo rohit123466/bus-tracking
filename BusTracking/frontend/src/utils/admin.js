@@ -36,6 +36,28 @@ export const STATUS_META = {
   },
 };
 
+// ── Route diagnosis ─────────────────────────────────────────────────────────
+// Tag tone per RouteDiagnosisService.Reason: red for faults to chase now, amber for likely
+// trouble, plain for buses that are simply out of service.
+export const REASON_TONE = {
+  IN_MAINTENANCE: '',
+  WITHDRAWN: '',
+  FEED_OUTAGE: 'danger',
+  TRIP_CANCELLED: 'warn',
+  GPS_LOST_WHILE_MOVING: 'danger',
+  STOPPED_AT_TERMINAL: '',
+  STOPPED_ON_ROUTE: 'warn',
+  SIGNAL_LOSS: 'warn',
+  NOT_OUT_TODAY: '',
+};
+
+/** A diagnosis report's buses split into { silent, notSeen }, each in the server's order. */
+export function splitDiagnoses(buses = []) {
+  const silent = [], notSeen = [];
+  for (const b of buses) (b.category === 'SILENT_TODAY' ? silent : notSeen).push(b);
+  return { silent, notSeen };
+}
+
 // ── KPI history (sparklines) ────────────────────────────────────────────────
 export const HISTORY_SIZE = 30;
 
