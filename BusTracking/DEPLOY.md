@@ -29,7 +29,11 @@
 - **History retention:** bus position history older than `BUS_HISTORY_RETENTION_HOURS` (default 24) is purged hourly, which keeps the free 1 GB Postgres from filling up.
 
 - **GTFS.zip is stored in Git LFS.** The Docker build fails early if it only gets the LFS pointer. If Render doesn't fetch LFS for your repo, remove the LFS rule (`BusTracking/.gitattributes`) and re-commit the zip as a normal file (55 MB, under GitHub's 100 MB limit).
-- **Import area:** `GTFS_IMPORT_RADIUS_DEGREES=0.16` limits data to North/North West Delhi so it fits a 512 MB instance. Set it to `0` for the full Delhi feed - use a larger plan, and wipe the DB first, since the import is skipped once routes exist. The live-bus filter uses the same route set.
+- **Import area:** the free-tier blueprint uses `GTFS_IMPORT_RADIUS_DEGREES=0.05`
+  to keep first boot within Render's deployment timeout. Increase it on a larger
+  plan, or set it to `0` for the full Delhi feed; wipe the DB first when changing
+  scope because the import is skipped once routes exist. The live-bus filter uses
+  the same route set.
 - **Free plans:** everything in `render.yaml` uses Render's free tier (no card needed).
   - The API sleeps after ~15 min without traffic; the first request afterwards takes ~1 min to wake it, and live-bus polling only runs while it is awake.
   - Free Postgres is deleted after 30 days (create a new one, or upgrade, to keep the data). It holds 1 GB.

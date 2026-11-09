@@ -55,10 +55,10 @@ services:
       # e.g. https://bus-tracker-web.onrender.com
       - key: CORS_ALLOWED_ORIGINS
         sync: false
-      # Import only North/North West Delhi (fits a 512MB instance). Set to 0 to
-      # import the full Delhi feed - needs a bigger plan and a much longer first boot.
+      # Keep the first boot within the free-tier deployment timeout. Increase this
+      # on a larger plan to import a wider area; set to 0 for the full Delhi feed.
       - key: GTFS_IMPORT_RADIUS_DEGREES
-        value: "0.16"
+        value: "0.05"
 
   # React + Vite frontend
   - type: web
