@@ -34,6 +34,9 @@
   plan, or set it to `0` for the full Delhi feed; wipe the DB first when changing
   scope because the import is skipped once routes exist. The live-bus filter uses
   the same route set.
+- **Startup behavior:** the API becomes healthy before GTFS seeding starts. The
+  import runs in the background after startup, and failures are logged without
+  taking down the API. Set `GTFS_IMPORT_ENABLED=false` to disable it temporarily.
 - **Free plans:** everything in `render.yaml` uses Render's free tier (no card needed).
   - The API sleeps after ~15 min without traffic; the first request afterwards takes ~1 min to wake it, and live-bus polling only runs while it is awake.
   - Free Postgres is deleted after 30 days (create a new one, or upgrade, to keep the data). It holds 1 GB.
