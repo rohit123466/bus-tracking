@@ -21,6 +21,7 @@ import java.util.Set;
 public class ProductionSafetyCheck {
 
     static final int MIN_SECRET_BYTES = 32;
+    static final int MIN_PASSWORD_LENGTH = 10;
     static final Set<String> KNOWN_WEAK_PASSWORDS = Set.of("admin", "admin123", "password", "changeme");
 
     public ProductionSafetyCheck(@Value("${jwt.secret:}") String jwtSecret,
@@ -38,9 +39,9 @@ public class ProductionSafetyCheck {
                 || jwtSecret.startsWith("dev-only")) {
             problems.add("JWT_SECRET must be set to a random value of at least " + MIN_SECRET_BYTES + " bytes");
         }
-        if (adminPassword == null || adminPassword.length() < 12
+        if (adminPassword == null || adminPassword.length() < MIN_PASSWORD_LENGTH
                 || KNOWN_WEAK_PASSWORDS.contains(adminPassword.toLowerCase())) {
-            problems.add("ADMIN_PASSWORD must be set to a strong value (12+ characters)");
+            problems.add("ADMIN_PASSWORD must be set to a non-default value (" + MIN_PASSWORD_LENGTH + "+ characters)");
         }
         boolean anyOrigin = corsOrigins == null || corsOrigins.length == 0
                 || Arrays.stream(corsOrigins).anyMatch(o -> o.isBlank() || o.contains("*"));

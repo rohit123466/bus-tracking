@@ -20,11 +20,11 @@
 
    If Render appends a suffix to a service name (name already taken), use the real URLs shown on each service page, then edit these variables and redeploy.
 4. First boot of the API imports GTFS into Postgres (a few minutes; watch the logs for "GTFS already seeded" on later boots).
-5. Admin login: username `admin`, password is the generated `ADMIN_PASSWORD` (Environment tab of the API service).
+5. Admin login: username `admin`, password is the `ADMIN_PASSWORD` value (Environment tab of the API service). The account is synced to these two variables on every start, so to reset a lost password change `ADMIN_PASSWORD` and redeploy.
 
 ## Things to know
 
-- **Startup safety check:** the `prod` profile refuses to start if `JWT_SECRET` is shorter than 32 bytes, `ADMIN_PASSWORD` is weak (shorter than 12 characters, or a default like `admin123`), or `CORS_ALLOWED_ORIGINS` is empty or a wildcard. The values `render.yaml` generates pass. If a deploy fails at boot, the log line starting `Refusing to start in prod:` names the variable to fix.
+- **Startup safety check:** the `prod` profile refuses to start if `JWT_SECRET` is shorter than 32 bytes, `ADMIN_PASSWORD` is weak (shorter than 10 characters, or a default like `admin123`), or `CORS_ALLOWED_ORIGINS` is empty or a wildcard. The values `render.yaml` generates pass. If a deploy fails at boot, the log line starting `Refusing to start in prod:` names the variable to fix.
 - **Learned routes:** `RouteLearner` saves to `/app/data/learned-routes.txt`. On the free plan that disk is wiped on every deploy and restart. Add a Render persistent disk (paid plans) mounted at `/app/data` to keep it.
 - **History retention:** bus position history older than `BUS_HISTORY_RETENTION_HOURS` (default 24) is purged hourly, which keeps the free 1 GB Postgres from filling up.
 

@@ -25,14 +25,19 @@ public class AdminUserSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        if (adminUserRepository.count() > 0) {
-            return;
+        // ADMIN_USERNAME/ADMIN_PASSWORD are the source of truth: the account is brought in line
+        // with them on every start, so changing the env vars and redeploying resets a lost password.
+        AdminUser user = adminUserRepository.findByUsername(defaultUsername).orElse(null);
+        if (user == null) {
+            adminUserRepository.save(AdminUser.builder()
+                    .username(defaultUsername)
+                    .passwordHash(passwordEncoder.encode(defaultPassword))
+                    .build());
+            log.warn("Created admin user '{}' from ADMIN_USERNAME/ADMIN_PASSWORD.", defaultUsername);
+        } else if (!passwordEncoder.matches(defaultPassword, user.getPasswordHash())) {
+            user.setPasswordHash(passwordEncoder.encode(defaultPassword));
+            adminUserRepository.save(user);
+            log.warn("Reset the password of admin user '{}' to the configured ADMIN_PASSWORD.", defaultUsername);
         }
-        adminUserRepository.save(AdminUser.builder()
-                .username(defaultUsername)
-                .passwordHash(passwordEncoder.encode(defaultPassword))
-                .build());
-        log.warn("Seeded default admin user '{}'. Set ADMIN_USERNAME/ADMIN_PASSWORD env vars "
-                + "and rotate this before deploying anywhere real.", defaultUsername);
     }
 }

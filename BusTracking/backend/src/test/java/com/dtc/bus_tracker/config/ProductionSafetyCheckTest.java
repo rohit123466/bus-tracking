@@ -26,6 +26,11 @@ class ProductionSafetyCheckTest {
         assertEquals(1, ProductionSafetyCheck.problems(STRONG_SECRET, "Admin123", ORIGINS).size());
     }
 
+    @Test void passwordLengthBoundaryIsTenCharacters() {
+        assertTrue(ProductionSafetyCheck.problems(STRONG_SECRET, "abcde@1234", ORIGINS).isEmpty());
+        assertEquals(1, ProductionSafetyCheck.problems(STRONG_SECRET, "abcd@1234", ORIGINS).size());
+    }
+
     @Test void rejectsWildcardOrMissingCorsOrigins() {
         assertEquals(1, ProductionSafetyCheck.problems(STRONG_SECRET, "correct-horse-battery", new String[]{"*"}).size());
         assertEquals(1, ProductionSafetyCheck.problems(STRONG_SECRET, "correct-horse-battery", new String[]{}).size());
