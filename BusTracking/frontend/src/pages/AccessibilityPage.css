@@ -1,11 +1,13 @@
 .accessibility-page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px 20px 60px;
+  padding: clamp(14px, 3vw, 24px) clamp(10px, 2.5vw, 20px) 60px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   animation: fadeIn 0.3s ease-out;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 @keyframes fadeIn {
@@ -160,8 +162,8 @@
 /* Stats Cards Grid */
 .access-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 14px;
 }
 
 .access-stat-card {
@@ -249,8 +251,9 @@
 
 .access-search-box {
   position: relative;
-  flex: 1 1 300px;
-  min-width: 260px;
+  flex: 1 1 260px;
+  min-width: 0;
+  width: 100%;
 }
 
 .access-search-icon {
@@ -389,8 +392,8 @@
 /* Bus Grid */
 .access-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
 }
 
 .access-bus-card {
@@ -667,6 +670,7 @@
   .access-hero {
     flex-direction: column;
     align-items: flex-start;
+    padding: 18px 16px;
   }
   .access-hero__meta {
     align-items: flex-start;
@@ -675,5 +679,47 @@
   .access-btn {
     width: 100%;
     justify-content: center;
+  }
+  .access-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .access-view-switch {
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .access-hero__title {
+    font-size: 20px;
+  }
+  .access-stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .access-stat-card {
+    padding: 12px;
+    gap: 8px;
+  }
+  .access-stat-card__val {
+    font-size: 22px;
+  }
+  .access-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .access-bus-card {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .access-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .access-pill {
+    padding: 4px 10px;
+    font-size: 11px;
   }
 }

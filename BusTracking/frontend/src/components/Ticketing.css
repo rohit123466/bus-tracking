@@ -248,7 +248,7 @@
 /* Bus picker */
 .bus-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
   gap: 10px;
 }
 
@@ -326,7 +326,7 @@
 /* KPI */
 .t-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 105px), 1fr));
   gap: 8px;
 }
 
@@ -589,7 +589,8 @@
 
 .bus-shell {
   width: 100%;
-  max-width: 340px;
+  max-width: min(340px, 100%);
+  box-sizing: border-box;
   border: 3px solid #9ca3af;
   border-radius: 36px 36px 14px 14px;
   padding: 10px 12px 8px;
@@ -1068,9 +1069,19 @@
   }
 }
 
+@media (max-width: 600px) {
+  .segment-controls label,
+  .sale-row label {
+    flex: 1 1 100%;
+  }
+}
+
 @media (max-width: 480px) {
   .ticketing-hero {
-    padding: 14px;
+    padding: 14px 12px;
+  }
+  .ticketing-hero h2 {
+    font-size: 19px;
   }
 
   .seat {
@@ -1079,7 +1090,7 @@
   }
 
   .bus-shell {
-    padding: 8px;
+    padding: 8px 6px;
   }
 
   .ticket-card-body {
@@ -1092,6 +1103,19 @@
     flex-direction: row;
     gap: 8px;
     align-items: baseline;
+  }
+}
+
+@media (max-width: 360px) {
+  .t-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .t-kpi {
+    padding: 8px 6px;
+  }
+  .t-kpi-value {
+    font-size: 17px;
   }
 }
 

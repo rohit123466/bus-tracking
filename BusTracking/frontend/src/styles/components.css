@@ -80,6 +80,7 @@
   color: var(--text-2);
   font-weight: 600;
   text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 .topnav-link:hover { background: var(--surface-2); color: var(--text); }
 .topnav-link[aria-current='page'] { background: var(--brand-soft); color: var(--brand); }
@@ -90,6 +91,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .main {
@@ -119,6 +121,11 @@
   font-size: 0.75rem;
   font-weight: 600;
   text-decoration: none;
+  min-width: 0;
+  padding: 4px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tab[aria-current='page'] { color: var(--brand); }
 .tab[aria-current='page'] .tab-icon { background: var(--brand-soft); }
@@ -128,13 +135,45 @@
   width: 48px;
   height: 28px;
   border-radius: 14px;
+  flex-shrink: 0;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1024px) {
+  .brand small { display: none; }
+  .topnav-link { padding: 0 8px; gap: 6px; font-size: 0.875rem; }
+  .topnav { margin-left: 6px; gap: 2px; }
+}
+
+@media (max-width: 840px) {
   .topnav { display: none; }
   .tabbar { display: flex; }
   .brand small { display: none; }
-  .topbar { min-height: 52px; }
+  .topbar { min-height: 52px; padding: 0 10px; }
+}
+
+@media (max-width: 480px) {
+  .topbar { min-height: 48px; padding: 0 8px; gap: 6px; }
+  .brand { font-size: 0.95rem; gap: 6px; min-width: 0; }
+  .brand > span:not(.brand-mark) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .brand-mark { width: 28px; height: 28px; border-radius: 7px; }
+  .topbar-end { gap: 2px; }
+  .icon-btn { width: 40px; height: 40px; }
+  .tab { min-height: 52px; font-size: 0.7rem; }
+  .tab-icon { width: 42px; height: 26px; }
+}
+
+@media (max-width: 360px) {
+  .topbar { padding: 0 6px; gap: 4px; }
+  .icon-btn { width: 36px; height: 36px; }
+  .brand { font-size: 0.875rem; }
+  .brand-mark { width: 26px; height: 26px; }
+  .tab { font-size: 0.65rem; min-height: 48px; gap: 1px; }
+  .tab-icon { width: 36px; height: 22px; }
+  .tab-icon svg { width: 16px; height: 16px; }
 }
 
 /* Connection banner */
@@ -150,7 +189,20 @@
 .conn-banner-waking,
 .conn-banner-reconnecting { background: var(--delayed-soft); color: var(--text); }
 .conn-banner-offline { background: var(--danger-soft); color: var(--text); }
-.conn-banner .btn { margin-left: auto; }
+.conn-banner .btn { margin-left: auto; flex-shrink: 0; }
+
+@media (max-width: 600px) {
+  .conn-banner {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    font-size: 0.8125rem;
+  }
+  .conn-banner .btn {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+}
 
 /* Menu (More) */
 .menu { position: relative; }
@@ -158,9 +210,10 @@
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  width: min(340px, calc(100vw - 24px));
-  max-height: min(70vh, 560px);
-  overflow: auto;
+  width: min(340px, calc(100vw - 20px));
+  max-height: min(75vh, 560px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 6px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -497,12 +550,12 @@ button.route-chip { border: 0; cursor: pointer; min-height: 36px; height: auto; 
 /* Toasts (in-app arrival alerts) */
 .toasts {
   position: fixed;
-  right: 16px;
+  right: clamp(10px, 3vw, 16px);
   bottom: 16px;
   z-index: 4000;
   display: grid;
   gap: 8px;
-  width: min(360px, calc(100vw - 32px));
+  width: min(360px, calc(100vw - 24px));
 }
 .toast {
   display: flex;
@@ -515,8 +568,8 @@ button.route-chip { border: 0; cursor: pointer; min-height: 36px; height: auto; 
   box-shadow: var(--shadow-2);
 }
 .toast p { margin: 2px 0 0; font-size: 0.875rem; color: var(--text-2); }
-@media (max-width: 760px) {
-  .toasts { bottom: calc(72px + env(safe-area-inset-bottom)); }
+@media (max-width: 840px) {
+  .toasts { bottom: calc(68px + env(safe-area-inset-bottom)); }
 }
 
 /* Service alerts */
@@ -635,3 +688,8 @@ button.route-chip { border: 0; cursor: pointer; min-height: 36px; height: auto; 
 .password-wrap { display: flex; gap: 6px; }
 .password-wrap .input { flex: 1; min-width: 0; }
 .password-wrap .icon-btn { flex: none; border-color: var(--border-strong); }
+
+@media (max-width: 480px) {
+  .login-wrap { padding: 16px 12px; }
+  .login-card { width: 100%; }
+}

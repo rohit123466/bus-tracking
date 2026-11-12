@@ -2,7 +2,7 @@
 .explore {
   position: relative;
   display: grid;
-  grid-template-columns: 400px minmax(0, 1fr);
+  grid-template-columns: clamp(340px, 28vw, 420px) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
@@ -56,6 +56,11 @@
   box-shadow: var(--shadow-1);
   font-size: 0.8125rem;
   font-weight: 600;
+}
+.status-pill span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .status-live .dot { color: var(--live); }
 .status-stale .dot,
@@ -193,32 +198,72 @@ div.arr-row { border-bottom: 1px solid var(--border); }
     left: 0;
     right: 0;
     bottom: 0;
-    height: 46%;
+    height: clamp(280px, 46%, 480px);
+    max-height: 80vh;
     border-right: 0;
     border-top-left-radius: var(--radius-l);
     border-top-right-radius: var(--radius-l);
     box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
     transition: height 0.2s ease;
   }
-  .explore.panel-closed .side { height: 128px; }
+  .explore.panel-closed .side { height: 124px; }
   .explore.panel-closed .side-body { display: none; }
   .side-head { padding-top: 0; }
   .status-pill { right: 64px; }
   .map-legend { display: none; }
   .map-wrap .leaflet-bottom { bottom: 46%; transition: bottom 0.2s ease; }
-  .explore.panel-closed .map-wrap .leaflet-bottom { bottom: 128px; }
+  .explore.panel-closed .map-wrap .leaflet-bottom { bottom: 124px; }
+}
+
+@media (max-width: 480px) {
+  .status-pill {
+    top: 8px;
+    left: 8px;
+    max-width: calc(100% - 58px);
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+  .map-ctrls {
+    top: 8px;
+    right: 8px;
+    gap: 6px;
+  }
+  .map-btn {
+    width: 38px;
+    height: 38px;
+  }
+  .side-head {
+    padding: 8px 12px;
+    gap: 6px;
+  }
+  .side-body {
+    padding: 12px;
+  }
+  .explore.panel-closed .side {
+    height: 112px;
+  }
+  .explore.panel-closed .map-wrap .leaflet-bottom {
+    bottom: 112px;
+  }
+  .facts {
+    grid-template-columns: minmax(75px, auto) minmax(0, 1fr);
+    gap: 6px 10px;
+    font-size: 0.8125rem;
+  }
 }
 
 /* ── Standard scrolling pages (Nearby, Saved) ─────────────────────────────── */
 .page {
   max-width: 880px;
   margin: 0 auto;
-  padding: 20px 16px 32px;
+  padding: clamp(14px, 3vw, 20px) clamp(10px, 2.5vw, 16px) 32px;
   display: grid;
   gap: 16px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .page-head { display: grid; gap: 4px; }
-.page-head h1 { font-size: 1.5rem; }
+.page-head h1 { font-size: clamp(1.25rem, 5vw, 1.5rem); }
 .page-head p { margin: 0; color: var(--text-2); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .check-row { min-height: 44px; cursor: pointer; }
@@ -243,14 +288,14 @@ div.arr-row { border-bottom: 1px solid var(--border); }
 /* ── Journey planner ──────────────────────────────────────────────────────── */
 .journey {
   display: grid;
-  grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
+  grid-template-columns: clamp(340px, 30vw, 440px) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
 .journey-side {
   min-height: 0;
   overflow: auto;
-  padding: 20px 16px 32px;
+  padding: clamp(14px, 3vw, 20px) clamp(10px, 2.5vw, 16px) 32px;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: grid;
@@ -261,6 +306,18 @@ div.arr-row { border-bottom: 1px solid var(--border); }
 .jr-form { display: grid; gap: 12px; }
 .jr-ends { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
 .jr-ends .stack { gap: 12px; }
+
+@media (max-width: 540px) {
+  .jr-ends {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .jr-ends .icon-btn {
+    justify-self: center;
+    margin: -4px 0;
+  }
+}
+
 .jr-card { overflow: hidden; }
 .jr-summary {
   display: grid;
@@ -315,7 +372,7 @@ div.arr-row { border-bottom: 1px solid var(--border); }
 @media (max-width: 899px) {
   .journey { display: block; height: 100%; overflow: auto; }
   .journey-side { border-right: 0; overflow: visible; }
-  .journey-map { height: 52vh; min-height: 300px; border-top: 1px solid var(--border); }
+  .journey-map { height: clamp(260px, 45vh, 420px); min-height: 240px; border-top: 1px solid var(--border); }
 }
 
 /* ── Classic pages wrapper ────────────────────────────────────────────────── */
@@ -408,6 +465,7 @@ div.arr-row { border-bottom: 1px solid var(--border); }
     flex-wrap: wrap;
     align-items: baseline;
     gap: 2px 8px;
+    overflow-wrap: anywhere;
   }
   .arr-table td:not(.c-route):not(.c-dest):not(.c-eta)::before {
     content: attr(data-label);
@@ -415,6 +473,36 @@ div.arr-row { border-bottom: 1px solid var(--border); }
     font-size: 0.75rem;
     font-weight: 700;
     color: var(--text-3);
+  }
+}
+
+@media (max-width: 480px) {
+  .stand-kpi-value { font-size: 1.35rem; }
+  .arr-table tr {
+    padding: 10px 12px;
+    gap: 4px 8px;
+  }
+  .arr-table td:not(.c-route):not(.c-dest):not(.c-eta)::before {
+    min-width: 5.5rem;
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .stand-kpis { grid-template-columns: 1fr; }
+  .stand-kpis .stand-kpi:nth-child(2) { grid-column: auto; order: 0; }
+  .arr-table tr {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .arr-table td.c-eta {
+    grid-column: 1 / -1;
+    justify-self: start;
+    text-align: left;
+    max-width: none;
+    margin-top: 4px;
+  }
+  .arr-table td:not(.c-route):not(.c-dest):not(.c-eta) {
+    grid-column: 1 / -1;
   }
 }
 
@@ -431,6 +519,18 @@ div.arr-row { border-bottom: 1px solid var(--border); }
 .sr-field-error { margin: 0; font-size: 0.8125rem; font-weight: 600; color: var(--danger, #c62828); }
 .sr-swap { flex: none; margin-top: 26px; }
 .sr-submit { min-height: 52px; font-size: 1.0625rem; gap: 8px; }
+
+@media (max-width: 560px) {
+  .sr-ends {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .sr-swap {
+    margin-top: 0;
+    align-self: center;
+  }
+}
 
 .sr-results-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px; }
 .sr-results-title { font-size: 1.25rem; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 0 2px; }
@@ -488,6 +588,38 @@ div.arr-row { border-bottom: 1px solid var(--border); }
   .sr-bus { flex-wrap: wrap; }
   .sr-bus-eta { max-width: none; width: 100%; justify-items: start; text-align: left; grid-auto-flow: column; justify-content: start; align-items: center; }
 }
+
+@media (max-width: 480px) {
+  .sr-card { padding: 12px 10px; gap: 10px; }
+  .sr-chip { font-size: 0.95rem; min-width: 48px; padding: 4px 8px; }
+  .sr-trip { grid-template-columns: 1fr; gap: 8px; }
+  .sr-end-to { text-align: left; justify-items: start; }
+  .sr-line { display: none; }
+}
+
+@media (max-width: 380px) {
+  .sr-facts { grid-template-columns: 1fr; gap: 6px; padding: 8px 10px; }
+}
+
+/* One-change journeys */
+.sr-nodirect { border-left: 4px solid var(--delayed); }
+.sr-chips { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--text-3); }
+.sr-transfer .sr-chip { min-width: 48px; }
+.sr-total { display: grid; justify-items: end; text-align: right; flex: none; }
+.sr-total strong { font-size: 1.125rem; }
+.sr-legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.sr-leg { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-s); background: var(--surface); }
+.sr-leg-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.sr-leg-head .sr-live-badge { margin-left: auto; }
+.sr-leg-walk { display: flex; align-items: center; gap: 6px; padding: 2px 12px; color: var(--walk, var(--text-2)); font-weight: 600; }
+@media (max-width: 640px) {
+  .sr-transfer .sr-card-head { flex-wrap: wrap; }
+  .sr-total { justify-items: start; text-align: left; width: 100%; }
+}
+/* Long "towards …" names must not widen the card past the screen. */
+.sr-list > li, .sr-legs > li, .sr-card, .sr-leg { min-width: 0; }
+.sr-leg-head .truncate { flex: 1 1 120px; min-width: 0; }
+.sr-card, .sr-leg, .sr-legs, .sr-list { grid-template-columns: minmax(0, 1fr); }
 
 /* One-change journeys */
 .sr-nodirect { border-left: 4px solid var(--delayed); }

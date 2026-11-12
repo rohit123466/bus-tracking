@@ -52,44 +52,46 @@ export default function PassingNearMePage() {
         </button>
       </div>
 
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Route</th>
-            <th>Wheelchair Status</th>
-            <th>Destination</th>
-            <th>Near stop</th>
-            <th>Distance</th>
-            <th>ETA</th>
-          </tr>
-        </thead>
-        <tbody>
-          {buses.map((b, i) => (
-            <tr
-              key={`${b.vehicleId}-${b.stopName}-${i}`}
-              aria-label={
-                `Route ${b.routeCode}${b.routeName ? ` — ${b.routeName}` : ''}, ` +
-                `heading to ${b.destination || 'unknown destination'}, ` +
-                `near ${b.stopName}, ${Math.round(b.distanceToStopMeters)} meters away, ETA ${b.etaMinutes == null ? "unavailable" : b.etaMinutes + " minutes"}` +
-                (b.wheelchairAccessible
-                  ? `, wheelchair accessible with ${b.wheelchairSpaces} reserved space${b.wheelchairSpaces === 1 ? '' : 's'} for wheelchair users only`
-                  : '')
-              }
-            >
-              <td>
-                <strong>{b.routeCode}</strong> {b.routeName ? `— ${b.routeName}` : ''}
-              </td>
-              <td>
-                <WheelchairBadge status={b.wheelchairSpaceAvailable} showLabel={true} size="sm" />
-              </td>
-              <td>{b.destination || '—'}</td>
-              <td>{b.stopName}</td>
-              <td>{Math.round(b.distanceToStopMeters)} m</td>
-              <td>{b.etaMinutes == null ? 'Unavailable' : `≈ ${b.etaMinutes} min (estimate)`}</td>
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Route</th>
+              <th>Wheelchair Status</th>
+              <th>Destination</th>
+              <th>Near stop</th>
+              <th>Distance</th>
+              <th>ETA</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {buses.map((b, i) => (
+              <tr
+                key={`${b.vehicleId}-${b.stopName}-${i}`}
+                aria-label={
+                  `Route ${b.routeCode}${b.routeName ? ` — ${b.routeName}` : ''}, ` +
+                  `heading to ${b.destination || 'unknown destination'}, ` +
+                  `near ${b.stopName}, ${Math.round(b.distanceToStopMeters)} meters away, ETA ${b.etaMinutes == null ? "unavailable" : b.etaMinutes + " minutes"}` +
+                  (b.wheelchairAccessible
+                    ? `, wheelchair accessible with ${b.wheelchairSpaces} reserved space${b.wheelchairSpaces === 1 ? '' : 's'} for wheelchair users only`
+                    : '')
+                }
+              >
+                <td>
+                  <strong>{b.routeCode}</strong> {b.routeName ? `— ${b.routeName}` : ''}
+                </td>
+                <td>
+                  <WheelchairBadge status={b.wheelchairSpaceAvailable} showLabel={true} size="sm" />
+                </td>
+                <td>{b.destination || '—'}</td>
+                <td>{b.stopName}</td>
+                <td>{Math.round(b.distanceToStopMeters)} m</td>
+                <td>{b.etaMinutes == null ? 'Unavailable' : `≈ ${b.etaMinutes} min (estimate)`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {buses.length === 0 && <p>No buses found on routes serving nearby stops yet.</p>}
     </div>
   );

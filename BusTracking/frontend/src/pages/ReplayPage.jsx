@@ -75,7 +75,7 @@ export default function ReplayPage() {
 
       {points.length > 0 && (
         <>
-          <div className="inline-form" style={{ marginTop: 12 }}>
+          <div className="inline-form replay-controls" style={{ marginTop: 12 }}>
             <button type="button" onClick={() => setPlaying((p) => !p)}>
               {playing ? 'Pause' : 'Play'}
             </button>

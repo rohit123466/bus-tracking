@@ -4,7 +4,7 @@
   box-sizing: border-box;
   position: relative;
   width: 100%;
-  max-width: 370px;
+  max-width: min(370px, 100%);
   padding: 18px 18px 12px;
   border: 3px solid #687477;
   border-radius: 64px 64px 34px 34px;
@@ -61,9 +61,14 @@
 }
 .seatmap--reference .bus-rear { margin-top: 16px; font-size: 9px; letter-spacing: 3px; }
 @media (max-width: 380px) {
-  .seatmap--reference .bus-shell { padding: 16px 12px 12px; }
+  .seatmap--reference .bus-shell { padding: 16px 10px 12px; }
   .seatmap--reference .seat-grid { gap: 5px; }
-  .seatmap--reference .seat { font-size: 11px; }
+  .seatmap--reference .seat { font-size: 11px; min-height: 40px; }
   .bus-entry { font-size: 8px; padding-left: 3px; }
   .bus-entry::before { left: -16px; }
+}
+@media (max-width: 340px) {
+  .seatmap--reference .bus-shell { padding: 14px 6px 10px; }
+  .seatmap--reference .seat-grid { gap: 3px; }
+  .seatmap--reference .seat { font-size: 10px; min-height: 36px; padding: 6px 1px 2px; }
 }

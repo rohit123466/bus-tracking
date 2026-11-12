@@ -27,12 +27,12 @@
   align-items: flex-end;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 16px 18px;
+  padding: clamp(12px, 3vw, 18px);
   border-radius: 12px;
   background: #0f2a44;
   color: #e2e8f0;
 }
-.cc-header h2 { margin: 2px 0; font-size: 22px; color: #fff; }
+.cc-header h2 { margin: 2px 0; font-size: clamp(18px, 4vw, 22px); color: #fff; }
 .cc-header .muted { color: #cbd5e1; }
 .cc-header p { margin: 0; }
 .cc-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #93c5fd; }
@@ -192,9 +192,17 @@
 @media (max-width: 900px) {
   .cc-two { grid-template-columns: 1fr; }
 }
-@media (max-width: 480px) {
+@media (max-width: 560px) {
   .cc-strip { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
   .cc-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cc-dl-row { grid-template-columns: 1fr; gap: 2px; }
-  .cc-header h2 { font-size: 19px; }
+  .cc-zone { padding: 10px 12px; gap: 8px; }
+  .cc-zone-value { font-size: 20px; }
+  .cc-zone-count strong { font-size: 24px; }
+}
+@media (max-width: 360px) {
+  .cc-metric strong { font-size: 17px; }
+  .cc-metric { padding: 8px 6px; }
 }
