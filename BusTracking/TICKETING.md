@@ -83,9 +83,12 @@ so seat numbers never change between page loads.
 | POST | `/tickets/{no}/cancel` | Void an active ticket |
 | POST | `/buses/{bus}/advance` | Move the bus to its next stop; passengers whose destination it is get down automatically |
 | GET | `/buses/{bus}/camera` | Latest camera scan compared with ticket occupancy, including mismatches |
-| POST | `/buses/{bus}/camera/scan` | "Simulate Camera Scan" |
+| POST | `/buses/{bus}/camera/scan` | "Run seat scan" |
 | POST | `/buses/{bus}/camera/observations` | Push observations `{observations:[{seatNumber,status,confidence?}], source?}`. Used for manual correction now, and is the hook for a real CV service |
-| POST | `/demo/reset` | Restore the deterministic demo data |
+| GET | `/buses/{bus}/live` | Live console view: trip, conductor, seats, standing area, seat-availability indicator, ticket sales |
+| POST | `/buses/{bus}/camera/standing-frames` | A camera / IoT device pushes one standing-area frame `{sequence?, capturedAt?, source?, detections:[{trackId, role?: PASSENGER\|CONDUCTOR, confidence?}]}`. Returns `APPLIED`, `DUPLICATE` or `OUT_OF_ORDER` |
+| PUT | `/buses/{bus}/camera/preset` | `{presetId}` selects the standing-area preset played on the bus; `null` pauses the preset feed |
+| POST | `/demo/reset` | Restore the deterministic preset data |
 
 ### Sale validation (`TicketService.sell`)
 
@@ -102,7 +105,11 @@ A sale is rejected with a specific message when:
 - the segment is sold out for that category ("Sold Out for this route segment (A → C)");
 - the bus is at capacity on any hop;
 - the seat overlaps an existing ticket ("Seat 05 is already occupied from B to C.");
-- the `requestId` is a duplicate.
+- the `requestId` was already used on a different bus.
+
+Resubmitting the same `requestId` on the same bus (a double click, or a retry after a timeout)
+issues nothing new: it returns the original ticket with HTTP 200 and `replayed: true`. The check
+runs under the trip lock, so concurrent duplicates are caught too.
 
 Sales lock the trip row (`SELECT … FOR UPDATE`), so concurrent sales can't double-book a seat.
 
@@ -114,7 +121,7 @@ Sales lock the trip row (`SELECT … FOR UPDATE`), so concurrent sales can't dou
   `Person with Disability / Divyangjan` ticket can take it, and auto-assignment never picks it.
 - A Divyangjan passenger may also take priority seats. Their ticket type is **Divyangjan /
   Accessibility ticket**, or **… – Wheelchair Space** when they use `WC1`, and is priced at the
-  configurable **Demo accessibility fare**.
+  configurable **Accessibility fare**.
 - There is no Student category because the existing system has none.
 
 ## Camera occupancy (simulated)
@@ -129,18 +136,59 @@ reports:
 - `TICKETED_BUT_EMPTY`: a ticket says occupied but the camera sees the seat empty;
 - `OCCUPIED_WITHOUT_TICKET`: the camera sees someone but no ticket covers the seat.
 
-The UI labels this module **DEMO · SIMULATED**.
+The panel tags these readings **Preset feed** while they come from the simulator.
 
-## Demo data (`TicketingDemoDataService`, seeded after the GTFS import)
+## Standing-area monitoring & seat availability
 
-- **Route `DEMO-AF`:** stops A · Kashmere Gate → B · Civil Lines → C · Mall Road → D · Azadpur →
+Camera buses also watch a designated **standing area**. The responsibilities are kept separate:
+
+| Concern | Class |
+|---|---|
+| Detection: who the camera sees, with a track id and role | `CameraOccupancyProvider.nextStandingFrame` (preset feed) or `POST …/standing-frames` (device) |
+| Continuous polling of the feed, every `feed-interval-ms` | `CameraFeedScheduler` |
+| Who counts as a standing passenger | `StandingZoneTracker` (one per bus, held by `StandingAreaMonitor`) |
+| AVAILABLE / NOT AVAILABLE | `SeatAvailabilityIndicator` |
+| Ticket sales | `TicketService` (unchanged rules) |
+
+`StandingZoneTracker` rules:
+- **Counted once.** People are keyed by track id. The same passenger in consecutive frames, or twice
+  in one frame, is one person.
+- **Conductor excluded.** A track reported as `CONDUCTOR` is never counted. The flag is sticky: if a
+  later frame mislabels the same track as a passenger, it still isn't counted. A counted track that
+  is later identified as the conductor stops counting immediately.
+- **Debounced.** A track counts after `confirm-frames` consecutive sightings and is dropped after
+  `release-frames` consecutive misses. One false detection or a short occlusion does not flip the
+  status.
+- **Ordered.** A frame whose `sequence` (or `capturedAt`) is not newer than the last one from the
+  same source is ignored as `DUPLICATE` / `OUT_OF_ORDER`. A new source, or a reconnect after an
+  outage, starts a fresh numbering.
+- **Fail-safe.** With no frame for `signal-timeout-ms`, the camera reads `DISCONNECTED` and the last
+  confirmed state is held and marked stale. Nothing is guessed.
+
+`SeatAvailabilityIndicator` reports **NOT AVAILABLE** when any passenger is standing (people stand
+only when they cannot sit) or when every seat on the current hop is ticketed. Otherwise it reports
+**AVAILABLE**. Without a camera, or before the first reading, it falls back to tickets alone. Ticket
+sales never change the standing count; they are only logged next to the camera events.
+
+Preset scenarios live in `src/main/resources/camera/standing-presets.json`
+(`ticketing.camera.presets-location`). Each one is a list of frames: `detections`, `"signal": false`
+(camera silent) or `"resend": true` (the previous frame again). Shipped presets: standing area clear,
+passenger standing, conductor issuing tickets, passengers entering and leaving, camera disconnects
+and reconnects, and a combined regular-service run. DTC-101 starts on the regular-service run and
+DTC-102 on standing area clear. The console's **Source** selector switches presets, or pauses the
+feed so a device can push frames. Standing-area state is in memory and rebuilds from the next frames
+after a restart.
+
+## Preset data (`TicketingDemoDataService`, seeded after the GTFS import)
+
+- **Route `AF-1`** (was `DEMO-AF`; existing databases are renamed on startup): stops A · Kashmere Gate → B · Civil Lines → C · Mall Road → D · Azadpur →
   E · Shalimar Bagh → F · Pitampura. The stops are not added to `route_stop`, so the journey
   planner never suggests the fictional route to riders.
 - **DTC-101** (low floor, camera):
   - #1001 Rahul, seat 05, A→C
   - #1002 Amit, seat 07, B→E
   - #1003 Neha, seat 05, C→E
-  - #1004 Demo Passenger (Divyangjan), WC1, A→D
+  - #1004 Suresh Pal (Divyangjan), WC1, A→D
   - plus 14 more tickets
   - The seeded camera scan disagrees on seat 05 (empty) and seat 12 (occupied).
 - **DTC-102** (low floor, camera): lightly booked. Seat 05 and WC1 are free along the whole route,
@@ -163,7 +211,7 @@ cd frontend &&  npm run dev                                                 # ht
 
 ## Demo script
 
-Log in at `/conductor` and press **Reset demo data** first.
+Log in at `/conductor` and press **Restore preset data** first.
 
 1. **TEST 1** – DTC-102, new passenger, Adult, A→C, seat 05 → ticket issued.
 2. **TEST 2** – B→D, seat 05 → "Seat 05 is already occupied from B · Civil Lines to C · Mall Road."
@@ -179,8 +227,16 @@ Log in at `/conductor` and press **Reset demo data** first.
 9. **TEST 9** – DTC-101 camera panel → "Occupancy mismatch detected: ticket #1001 says Seat 05 is
    occupied … but the camera sees it empty."
 10. **Try the journey:** on DTC-101, press **Move to B** then **Move to C**. Rahul and others get
-    down automatically, and seat 05 now shows Neha (C→E). Press **Simulate Camera Scan** for a
+    down automatically, and seat 05 now shows Neha (C→E). Press **Run seat scan** for a
     fresh scan at C.
+11. **Standing area:** on DTC-102, set **Source** to each preset in turn. *Standing area clear* →
+    EMPTY / AVAILABLE. *Passenger standing* → OCCUPIED / NOT AVAILABLE, 1 standing. *Conductor
+    issuing tickets* → the conductor shows as in the area but the count stays 0 and seats stay
+    AVAILABLE; issue a ticket meanwhile, and double-click **Issue ticket**, which still issues only
+    one ticket. *Camera disconnects and reconnects* → DISCONNECTED with the last reading held.
+
+Automated checks for the standing area: `StandingZoneTrackerTest` (25 rules and edge cases) and
+`CameraPresetPlaybackTest` (every shipped preset played through the tracker).
 
 Automated checks:
 - `SeatAvailabilityServiceTest` covers the overlap rules, vacating, early alighting, wheelchair and

@@ -31,7 +31,7 @@ const MORE = [
     heading: 'Demo & staff',
     items: [
       { to: '/seats', label: 'Seat availability (demo)', hint: 'Demonstration data, not real buses' },
-      { to: '/conductor', label: 'Conductor console (demo)', hint: 'Staff login, demonstration data' },
+      { to: '/conductor', label: 'Conductor console', hint: 'Staff login: ticketing and occupancy' },
       { to: '/admin', label: 'Admin dashboard', hint: 'Staff login' },
     ],
   },

@@ -2,6 +2,7 @@ package com.dtc.bus_tracker.service;
 
 import com.dtc.bus_tracker.dto.CameraObservationRequest;
 import com.dtc.bus_tracker.dto.CameraReport;
+import com.dtc.bus_tracker.dto.StandingFrameRequest;
 import com.dtc.bus_tracker.entity.Bus;
 import com.dtc.bus_tracker.entity.CameraOccupancy;
 import com.dtc.bus_tracker.entity.CameraSeatStatus;
@@ -33,13 +34,54 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CameraMonitoringService {
 
-    public static final String SIMULATED_DISCLAIMER = "DEMO: camera observations are simulated from ticket data "
-            + "with injected noise. No real camera feed or computer-vision model is connected.";
+    public static final String SIMULATED_DISCLAIMER = "Readings come from the preset camera feed: seat scans are "
+            + "derived from ticket data with injected noise. No camera hardware or computer-vision model is connected.";
 
     private final TicketingJourneyLoader journeyLoader;
     private final SeatAvailabilityService seatAvailability;
     private final CameraOccupancyProvider provider;
     private final CameraOccupancyRepository cameraOccupancyRepository;
+    private final StandingAreaMonitor standingAreaMonitor;
+
+    /**
+     * CONNECTED, DISCONNECTED or NOT_INSTALLED. A fitted camera counts as
+     * connected only while standing-area frames are actually arriving.
+     */
+    public String cameraStatus(Bus bus) {
+        String device = provider.feedStatus(bus);
+        if (!"CONNECTED".equals(device)) return device;
+        return standingAreaMonitor.snapshot(bus.getVehicleId()).signal() == StandingZoneTracker.Signal.CONNECTED
+                ? "CONNECTED" : "DISCONNECTED";
+    }
+
+    /**
+     * One standing-area frame pushed by a camera / IoT device. Goes through
+     * the same tracker as the preset feed, so de-duplication, conductor
+     * exclusion and ordering apply identically.
+     */
+    public StandingZoneTracker.FrameResult recordStandingFrame(String busNumber, StandingFrameRequest request) {
+        Bus bus = journeyLoader.findTicketingBus(busNumber);
+        requireCamera(bus);
+        List<StandingZoneTracker.Detection> detections = request.getDetections().stream()
+                .map(d -> new StandingZoneTracker.Detection(d.getTrackId(),
+                        d.getRole() != null ? d.getRole() : StandingZoneTracker.Role.PASSENGER,
+                        d.getConfidence() != null ? d.getConfidence() : 1.0))
+                .toList();
+        String source = request.getSource() == null || request.getSource().isBlank()
+                ? "DEVICE" : request.getSource().trim().toUpperCase();
+        return standingAreaMonitor.accept(bus.getVehicleId(), new StandingZoneTracker.Frame(
+                request.getSequence(), request.getCapturedAt(), detections, source));
+    }
+
+    /** Switches the bus's standing-area preset; a null id pauses the preset feed. */
+    public void selectPreset(String busNumber, String presetId) {
+        Bus bus = journeyLoader.findTicketingBus(busNumber);
+        requireCamera(bus);
+        if (provider.presets().isEmpty()) {
+            throw TicketingException.conflict("The camera source of bus " + busNumber + " has no presets.");
+        }
+        provider.selectPreset(bus.getVehicleId(), presetId);
+    }
 
     @Transactional(readOnly = true)
     public CameraReport report(String busNumber) {
@@ -155,7 +197,7 @@ public class CameraMonitoringService {
         return CameraReport.builder()
                 .busNumber(journey.busNumber())
                 .cameraInstalled(Boolean.TRUE.equals(bus.getCameraInstalled()))
-                .cameraStatus(provider.feedStatus(bus))
+                .cameraStatus(cameraStatus(bus))
                 .provider(provider.sourceName())
                 .simulated(provider.isSimulated())
                 .disclaimer(provider.isSimulated() ? SIMULATED_DISCLAIMER : null)

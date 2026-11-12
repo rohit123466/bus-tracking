@@ -13,7 +13,7 @@ public class FareQuote {
     private String currency;
     private TicketType ticketType;
     private String ticketTypeLabel;
-    /** e.g. "Demo fare", "Demo accessibility fare". */
+    /** e.g. "Standard fare", "Accessibility fare". */
     private String fareLabel;
     private String disclaimer;
 }

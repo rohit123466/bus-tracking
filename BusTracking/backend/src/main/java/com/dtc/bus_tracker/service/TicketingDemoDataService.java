@@ -57,7 +57,10 @@ import java.util.Set;
 @Slf4j
 public class TicketingDemoDataService {
 
-    public static final String ROUTE_CODE = "DEMO-AF";
+    public static final String ROUTE_CODE = "AF-1";
+    /** Code this route had before it was renamed; existing databases are migrated on startup. */
+    public static final String LEGACY_ROUTE_CODE = "DEMO-AF";
+    private static final String ROUTE_NAME = "Kashmere Gate - Pitampura (A \u2192 F)";
     private static final String SEED_USER = "demo-seed";
 
     private record DemoStop(String stopId, String name, double lat, double lng) {
@@ -88,7 +91,7 @@ public class TicketingDemoDataService {
             new DemoTicket("Rahul", PassengerCategory.ADULT, "05", 'A', 'C'),
             new DemoTicket("Amit", PassengerCategory.ADULT, "07", 'B', 'E'),
             new DemoTicket("Neha", PassengerCategory.ADULT, "05", 'C', 'E'),
-            new DemoTicket("Demo Passenger", PassengerCategory.DIVYANGJAN, "WC1", 'A', 'D'),
+            new DemoTicket("Suresh Pal", PassengerCategory.DIVYANGJAN, "WC1", 'A', 'D'),
             new DemoTicket("Sunita Sharma", PassengerCategory.SENIOR_CITIZEN, "02", 'A', 'F'),
             new DemoTicket("Priya Verma", PassengerCategory.ADULT, "09", 'A', 'F'),
             new DemoTicket("Arjun Singh", PassengerCategory.ADULT, "10", 'A', 'B'),
@@ -112,6 +115,12 @@ public class TicketingDemoDataService {
             new DemoTicket("Tanvi Desai", PassengerCategory.ADULT, "12", 'C', 'F'),
             new DemoTicket("Farhan Ali", PassengerCategory.ADULT, "14", 'A', 'B'));
 
+    // Names for the generated riders of the standard bus (10 x 8 = 80 distinct).
+    private static final List<String> RIDER_FIRST_NAMES = List.of(
+            "Aarav", "Diya", "Kabir", "Ishita", "Manoj", "Rekha", "Sanjay", "Lata", "Nikhil", "Geeta");
+    private static final List<String> RIDER_LAST_NAMES = List.of(
+            "Chauhan", "Bansal", "Saxena", "Tiwari", "Arora", "Negi", "Rawat", "Dubey");
+
     private final RouteRepository routeRepository;
     private final StopRepository stopRepository;
     private final BusRepository busRepository;
@@ -127,13 +136,18 @@ public class TicketingDemoDataService {
     private final TicketingJourneyLoader journeyLoader;
     private final SeatAvailabilityService seatAvailability;
     private final CameraMonitoringService cameraMonitoring;
+    private final CameraOccupancyProvider cameraProvider;
+    private final StandingAreaMonitor standingAreaMonitor;
     private final TransactionTemplate transactionTemplate;
     private final JdbcTemplate jdbcTemplate;
 
     @EventListener(ApplicationReadyEvent.class)
     public void seedOnStartup() {
         try {
-            transactionTemplate.executeWithoutResult(status -> ensureRouteBusesAndSeats());
+            transactionTemplate.executeWithoutResult(status -> {
+                ensureRouteBusesAndSeats();
+                renameLegacyPassengers();
+            });
             transactionTemplate.executeWithoutResult(status -> {
                 if (ticketRepository.count() == 0 && passengerRepository.count() == 0) {
                     seedTicketsAndCamera();
@@ -170,11 +184,20 @@ public class TicketingDemoDataService {
             }
         }
         transactionTemplate.executeWithoutResult(status -> seedTicketsAndCamera());
+        // Standing-area state lives in memory: start every bus on its default preset again.
+        cameraProvider.resetFeed();
+        standingAreaMonitor.reset();
     }
 
     private void ensureRouteBusesAndSeats() {
-        Route route = routeRepository.findByRouteCode(ROUTE_CODE).orElseGet(() -> routeRepository.save(
-                Route.builder().routeCode(ROUTE_CODE).name("[DEMO] Ticketing demo route A → F").build()));
+        Route route = routeRepository.findByRouteCode(ROUTE_CODE)
+                .or(() -> routeRepository.findByRouteCode(LEGACY_ROUTE_CODE).map(legacy -> {
+                    legacy.setRouteCode(ROUTE_CODE);
+                    legacy.setName(ROUTE_NAME);
+                    return legacy;
+                }))
+                .orElseGet(() -> routeRepository.save(
+                        Route.builder().routeCode(ROUTE_CODE).name(ROUTE_NAME).build()));
 
         // The stops are deliberately NOT added to the route_stop join table:
         // the journey planner and "routes serving this stop" read that table,
@@ -265,7 +288,29 @@ public class TicketingDemoDataService {
 
     private DemoTicket rider(int n, int seat, int prioritySeats, char from, char to) {
         PassengerCategory category = seat <= prioritySeats ? PassengerCategory.SENIOR_CITIZEN : PassengerCategory.ADULT;
-        return new DemoTicket(String.format("Demo Rider %02d", n), category, String.format("%02d", seat), from, to);
+        return new DemoTicket(riderName(n), category, String.format("%02d", seat), from, to);
+    }
+
+    /**
+     * Databases seeded before the preset passengers were given real names
+     * still hold "Demo Passenger" / "Demo Rider NN"; give them the names a
+     * fresh seed would, so the console reads the same either way.
+     */
+    private void renameLegacyPassengers() {
+        passengerRepository.findAll().forEach(p -> {
+            String name = p.getName();
+            if ("Demo Passenger".equals(name)) {
+                p.setName("Suresh Pal");
+            } else if (name != null && name.matches("Demo Rider \\d+")) {
+                int n = Integer.parseInt(name.substring("Demo Rider ".length()));
+                p.setName(riderName(n));
+            }
+        });
+    }
+
+    private static String riderName(int n) {
+        return RIDER_FIRST_NAMES.get((n - 1) % RIDER_FIRST_NAMES.size()) + " "
+                + RIDER_LAST_NAMES.get((n - 1) / RIDER_FIRST_NAMES.size() % RIDER_LAST_NAMES.size());
     }
 
     private void issue(String busNumber, List<DemoTicket> tickets) {

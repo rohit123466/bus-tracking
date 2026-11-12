@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class TicketResponse {
     private String ticketNumber;
     private String busNumber;
@@ -48,4 +48,10 @@ public class TicketResponse {
     private String qrCodeBase64;
     /** Human-readable disclaimer shown alongside the QR code. */
     private String qrDisclaimer;
+    /**
+     * True when this response repeats an earlier sale: the same requestId was
+     * submitted again (double click, retry after a timeout) and no second
+     * ticket was issued.
+     */
+    private boolean replayed;
 }

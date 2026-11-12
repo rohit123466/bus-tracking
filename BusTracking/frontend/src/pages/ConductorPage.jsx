@@ -9,13 +9,20 @@ import {
   getAdminToken,
   getBusTickets,
   getCameraReport,
+  getLiveOccupancy,
   getPassengers,
   getTicketingBuses,
   reportCameraObservations,
   resetTicketingDemo,
+  selectCameraPreset,
   sellTicket,
   simulateCameraScan,
 } from '../api/client';
+import usePolling from '../hooks/usePolling';
+import LiveStatusStrip from '../components/conductor/LiveStatusStrip';
+import BusInfoPanel from '../components/conductor/BusInfoPanel';
+import StandingAreaPanel from '../components/conductor/StandingAreaPanel';
+import TicketSalesPanel from '../components/conductor/TicketSalesPanel';
 import AdminLoginForm from '../components/AdminLoginForm';
 import SeatMap from '../components/SeatMap';
 import RouteTimeline from '../components/RouteTimeline';
@@ -28,6 +35,7 @@ import SeatCountChips from '../components/SeatCountChips';
 import { PASSENGER_CATEGORIES } from '../utils/passengerCategories';
 import useSeatMap from '../hooks/useSeatMap';
 import '../components/Ticketing.css';
+import '../components/conductor/ConductorConsole.css';
 
 const NEW_PASSENGER = 'new';
 const TICKET_FILTERS = [
@@ -36,6 +44,9 @@ const TICKET_FILTERS = [
   { key: 'done', label: 'Completed / cancelled', test: (t) => t.status !== 'ACTIVE' },
   { key: 'all', label: 'All', test: () => true },
 ];
+
+// The live view (standing area, availability, sales) follows the 2 s camera feed.
+const LIVE_REFRESH_MS = 2000;
 
 const newRequestId = () =>
   globalThis.crypto?.randomUUID?.() || `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -130,9 +141,22 @@ export default function ConductorPage() {
     setTickets([]);
   }, [busNumber]);
 
+  const liveQuery = usePolling(
+    token && busNumber ? busNumber : null,
+    (signal) => getLiveOccupancy(busNumber, signal),
+    { interval: LIVE_REFRESH_MS }
+  );
+  const live = liveQuery.data;
+  const refreshLive = liveQuery.refresh;
+  useEffect(() => {
+    const status = liveQuery.error?.status;
+    if (status === 401 || status === 403) logout();
+  }, [liveQuery.error, logout]);
+
   const refreshAll = () => {
     refresh();
     reloadSeatMap();
+    refreshLive();
   };
 
   const run = (promise, onDone) => {
@@ -160,10 +184,14 @@ export default function ConductorPage() {
         ? { passengerId: existingPassenger.id }
         : { passengerName: newName.trim(), category: newCategory }),
     };
+    if (busy) return;
     setBusy(true);
     sellTicket(request)
       .then((ticket) => {
         setLastTicket(ticket);
+        if (ticket.replayed) {
+          setNotice(`This sale was already processed as ticket #${ticket.ticketNumber} — no duplicate ticket was issued.`);
+        }
         setSaleCount((c) => c + 1);
         setSelectedSeat(null);
         setNewName('');
@@ -195,24 +223,32 @@ export default function ConductorPage() {
 
   return (
     <div className="page-panel page-panel-wide ticketing-page">
-      <header className="ticketing-hero ticketing-hero--conductor">
+      <header className="cc-header">
         <div>
-          <span className="hero-kicker">🧾 Conductor console</span>
-          <h2>Sell tickets &amp; monitor occupancy</h2>
-          <p>Tickets hold a seat only between boarding and destination stops.</p>
+          <span className="cc-kicker">DTC · Conductor console</span>
+          <h2>{live ? `${live.busNumber} · Route ${live.routeCode}` : 'Bus operations'}</h2>
+          <p className="muted small">
+            {live
+              ? `${live.origin} → ${live.destination} · conductor ${live.conductorId}`
+              : 'Ticketing, seat availability and standing-area monitoring'}
+          </p>
         </div>
         <div className="hero-actions">
+          <button type="button" className="btn-ghost" disabled={busy} onClick={refreshAll}>
+            ⟳ Refresh
+          </button>
           <button
             type="button"
             className="btn-ghost"
             disabled={busy}
+            title="Restore the preset tickets, passengers, camera scenarios and bus positions"
             onClick={() => {
-              if (window.confirm('Reset all demo tickets, passengers, camera scans and bus positions?')) {
-                run(resetTicketingDemo(), () => setNotice('Demo data reset: every bus is back at stop A.'));
+              if (window.confirm('Restore the preset tickets, passengers, camera scenarios and bus positions? Tickets issued since will be removed.')) {
+                run(resetTicketingDemo(), () => setNotice('Preset data restored: every bus is back at its first stop.'));
               }
             }}
           >
-            ↺ Reset demo data
+            ↺ Restore preset data
           </button>
           <button type="button" className="btn-ghost" onClick={logout}>
             Log out
@@ -225,14 +261,17 @@ export default function ConductorPage() {
 
       <BusPickerCards buses={buses} selected={busNumber} onSelect={setBusNumber} />
 
+      <LiveStatusStrip live={live} stale={Boolean(liveQuery.error)} />
+
+      <BusInfoPanel live={live} />
+
       <div className="conductor-grid">
         <div className="conductor-main">
-          <OccupancyDashboard bus={bus} />
 
           {bus && (
             <section className="t-card">
               <div className="t-card-row">
-                <h3 className="t-card-title">🛣️ Journey</h3>
+                <h3 className="t-card-title">Journey</h3>
                 <button
                   type="button"
                   className="btn-primary"
@@ -256,7 +295,7 @@ export default function ConductorPage() {
 
           {seatMap && (
             <section className="t-card">
-              <h3 className="t-card-title">🎫 Sell a ticket</h3>
+              <h3 className="t-card-title">Issue a ticket</h3>
               <form className="sale-form" onSubmit={submitSale}>
                 <div className="sale-row">
                   <label>
@@ -364,16 +403,30 @@ export default function ConductorPage() {
                 </div>
               )}
               {lastTicket && (
-                <div className="sale-success">
-                  <p>✅ Ticket issued</p>
+                <div className="sale-success" role="status">
+                  <p>{lastTicket.replayed ? '✅ Already issued — no duplicate ticket created' : '✅ Ticket issued'}</p>
                   <TicketCard ticket={lastTicket} highlight />
                 </div>
               )}
             </section>
           )}
+
+          <OccupancyDashboard bus={bus} />
         </div>
 
         <div className="conductor-side">
+          <StandingAreaPanel
+            live={live}
+            busy={busy}
+            onSelectPreset={(presetId) =>
+              run(selectCameraPreset(busNumber, presetId), () =>
+                setNotice(presetId ? 'Camera feed scenario changed.' : 'Preset camera feed paused; waiting for device frames.')
+              )
+            }
+          />
+
+          <TicketSalesPanel live={live} />
+
           <CameraMonitorPanel
             report={camera}
             busy={busy}
@@ -384,7 +437,7 @@ export default function ConductorPage() {
           />
 
           <section className="t-card">
-            <h3 className="t-card-title">🎟️ Tickets on {busNumber}</h3>
+            <h3 className="t-card-title">Ticket history · {busNumber}</h3>
             <div className="filter-tabs" role="tablist">
               {TICKET_FILTERS.map((f) => (
                 <button

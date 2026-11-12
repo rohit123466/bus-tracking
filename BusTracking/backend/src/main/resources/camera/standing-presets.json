@@ -1,0 +1,96 @@
+{
+  "defaults": {
+    "DTC-101": "service-run",
+    "DTC-102": "standing-clear"
+  },
+  "presets": [
+    {
+      "id": "standing-clear",
+      "label": "Standing area clear",
+      "description": "Nobody is standing in the designated standing area.",
+      "steps": [
+        { "detections": [] }
+      ]
+    },
+    {
+      "id": "passenger-standing",
+      "label": "Passenger standing",
+      "description": "One passenger stands in the designated standing area.",
+      "steps": [
+        { "detections": [ { "track": "P1", "role": "PASSENGER", "confidence": 0.93 } ] }
+      ]
+    },
+    {
+      "id": "conductor-ticketing",
+      "label": "Conductor issuing tickets",
+      "description": "The conductor stands and moves through the standing area selling tickets; no passenger is standing. One frame mislabels the conductor as a passenger.",
+      "steps": [
+        { "repeat": 3, "detections": [ { "track": "C1", "role": "CONDUCTOR", "confidence": 0.95 } ] },
+        { "repeat": 2, "detections": [] },
+        { "repeat": 2, "detections": [ { "track": "C1", "role": "CONDUCTOR", "confidence": 0.91 } ] },
+        { "repeat": 1, "detections": [ { "track": "C1", "role": "PASSENGER", "confidence": 0.62 } ] },
+        { "repeat": 2, "detections": [ { "track": "C1", "role": "CONDUCTOR", "confidence": 0.94 } ] },
+        { "repeat": 4, "detections": [] }
+      ]
+    },
+    {
+      "id": "passengers-boarding",
+      "label": "Passengers entering and leaving",
+      "description": "Several passengers enter the standing area one after another and then leave.",
+      "steps": [
+        { "repeat": 3, "detections": [] },
+        { "repeat": 3, "detections": [ { "track": "P1", "role": "PASSENGER", "confidence": 0.92 } ] },
+        { "repeat": 3, "detections": [
+          { "track": "P1", "role": "PASSENGER", "confidence": 0.92 },
+          { "track": "P2", "role": "PASSENGER", "confidence": 0.88 } ] },
+        { "repeat": 4, "detections": [
+          { "track": "P1", "role": "PASSENGER", "confidence": 0.91 },
+          { "track": "P2", "role": "PASSENGER", "confidence": 0.90 },
+          { "track": "P3", "role": "PASSENGER", "confidence": 0.86 } ] },
+        { "repeat": 4, "detections": [
+          { "track": "P2", "role": "PASSENGER", "confidence": 0.90 },
+          { "track": "P3", "role": "PASSENGER", "confidence": 0.87 } ] },
+        { "repeat": 4, "detections": [ { "track": "P3", "role": "PASSENGER", "confidence": 0.89 } ] },
+        { "repeat": 5, "detections": [] }
+      ]
+    },
+    {
+      "id": "signal-loss",
+      "label": "Camera disconnects and reconnects",
+      "description": "A passenger is standing when the camera stops sending frames, then the camera reconnects.",
+      "steps": [
+        { "repeat": 4, "detections": [ { "track": "P1", "role": "PASSENGER", "confidence": 0.93 } ] },
+        { "repeat": 8, "signal": false },
+        { "repeat": 4, "detections": [ { "track": "P1", "role": "PASSENGER", "confidence": 0.92 } ] },
+        { "repeat": 5, "detections": [] }
+      ]
+    },
+    {
+      "id": "service-run",
+      "label": "Regular service",
+      "description": "A full sequence: the area is clear, a passenger stands, the conductor passes through selling tickets, a second passenger stands, a detection is briefly missed, a frame is repeated, passengers leave, and the camera drops out and recovers.",
+      "steps": [
+        { "repeat": 4, "detections": [] },
+        { "repeat": 4, "detections": [ { "track": "P1", "role": "PASSENGER", "confidence": 0.93 } ] },
+        { "repeat": 3, "detections": [
+          { "track": "P1", "role": "PASSENGER", "confidence": 0.92 },
+          { "track": "C1", "role": "CONDUCTOR", "confidence": 0.95 } ] },
+        { "repeat": 3, "detections": [
+          { "track": "P1", "role": "PASSENGER", "confidence": 0.92 },
+          { "track": "P2", "role": "PASSENGER", "confidence": 0.87 },
+          { "track": "C1", "role": "CONDUCTOR", "confidence": 0.94 } ] },
+        { "repeat": 2, "detections": [ { "track": "P2", "role": "PASSENGER", "confidence": 0.88 } ] },
+        { "repeat": 2, "detections": [
+          { "track": "P1", "role": "PASSENGER", "confidence": 0.90 },
+          { "track": "P1", "role": "PASSENGER", "confidence": 0.71 },
+          { "track": "P2", "role": "PASSENGER", "confidence": 0.89 } ] },
+        { "repeat": 2, "resend": true },
+        { "repeat": 4, "detections": [ { "track": "P2", "role": "PASSENGER", "confidence": 0.90 } ] },
+        { "repeat": 6, "signal": false },
+        { "repeat": 3, "detections": [ { "track": "P2", "role": "PASSENGER", "confidence": 0.91 } ] },
+        { "repeat": 3, "detections": [ { "track": "C1", "role": "CONDUCTOR", "confidence": 0.93 } ] },
+        { "repeat": 5, "detections": [] }
+      ]
+    }
+  ]
+}

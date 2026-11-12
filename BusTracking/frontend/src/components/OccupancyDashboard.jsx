@@ -19,7 +19,7 @@ export default function OccupancyDashboard({ bus }) {
     {
       label: 'Camera',
       value: bus.cameraStatus === 'NOT_INSTALLED' ? 'None' : bus.cameraStatus,
-      sub: bus.cameraStatus === 'NOT_INSTALLED' ? null : `${bus.cameraMismatches} mismatch${bus.cameraMismatches === 1 ? '' : 'es'}${bus.cameraSimulated ? ' · demo' : ''}`,
+      sub: bus.cameraStatus === 'NOT_INSTALLED' ? null : `${bus.cameraMismatches} mismatch${bus.cameraMismatches === 1 ? '' : 'es'}`,
       tone: bus.cameraMismatches > 0 ? 'red' : '',
     },
   ];
@@ -28,7 +28,7 @@ export default function OccupancyDashboard({ bus }) {
     <section className="t-card">
       <div className="t-card-row">
         <h3 className="t-card-title">
-          📊 {bus.busNumber} <span className="muted">· {bus.busTypeLabel} · {bus.routeCode}</span>
+          Occupancy by route segment <span className="muted">· {bus.busNumber}</span>
         </h3>
         <span className="muted small">
           At {bus.currentStop?.name}

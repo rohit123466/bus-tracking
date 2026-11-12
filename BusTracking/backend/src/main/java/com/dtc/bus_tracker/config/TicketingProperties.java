@@ -70,5 +70,19 @@ public class TicketingProperties {
     public static class Camera {
         /** Chance a simulated scan disagrees with the ticket data for a seat. */
         private double simulatedMismatchRate = 0.08;
+        /** Whether the preset standing-area feed is played to camera buses. */
+        private boolean feedEnabled = true;
+        /** Gap between two preset standing-area frames. */
+        private long feedIntervalMs = 2000;
+        /** No frame for this long means the camera signal is lost. */
+        private long signalTimeoutMs = 8000;
+        /** Consecutive frames a person must be seen in before they are counted. */
+        private int confirmFrames = 2;
+        /** Consecutive frames a counted person must be missing from before they are dropped. */
+        private int releaseFrames = 3;
+        /** Detections below this confidence are ignored. */
+        private double minConfidence = 0.5;
+        /** Standing-area preset scenarios (see CameraPresetLibrary). */
+        private String presetsLocation = "classpath:camera/standing-presets.json";
     }
 }
