@@ -130,12 +130,14 @@ export const getAdminBuses = (params, signal) =>
 
 /** Every page of the fleet list for `params` (up to `maxPages` of 500), e.g. for CSV export. */
 export async function getAllAdminBuses(params, signal, maxPages = 20) {
-  const rows = [];
-  for (let page = 0; page < maxPages; page++) {
-    const res = await getAdminBuses({ ...params, page, size: 500 }, signal);
-    rows.push(...res.content);
-    if (page + 1 >= res.totalPages) return { rows, total: res.totalElements, complete: true };
-  }
+  // The first page says how many there are; the rest are fetched at once rather than one by one.
+  const first = await getAdminBuses({ ...params, page: 0, size: 500 }, signal);
+  const pages = Math.min(first.totalPages, maxPages);
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, pages - 1) }, (_, i) => getAdminBuses({ ...params, page: i + 1, size: 500 }, signal)),
+  );
+  const rows = [first, ...rest].flatMap((res) => res.content);
+  if (first.totalPages <= maxPages) return { rows, total: first.totalElements, complete: true };
   return { rows, total: rows.length, complete: false };
 }
 

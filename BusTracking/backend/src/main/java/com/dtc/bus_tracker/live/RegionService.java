@@ -391,8 +391,9 @@ public class RegionService {
             .<Object>map(b -> {
               var vehicle = vehicles.get(b.vehicleId());
               var route = index.routes.get(b.routeId());
-              String check = vehicle == null ? CHECK_NO_STOPS : routeCheck(vehicle, route);
-              var likely = vehicle == null ? List.<String>of() : likelyRoutes(vehicle, route, check);
+              var derived = derived(vehicle, route);
+              String check = derived.check();
+              var likely = derived.likely();
               if (!eligible.contains(b.routeCode()) && likely.stream().noneMatch(eligible::contains))
                 return excludedByRegion;
               if (insideAreaOnly && !insideArea(b.busLatitude(), b.busLongitude(), filter))
@@ -403,7 +404,7 @@ public class RegionService {
                 if (r != null) here.addAll(r);
               }
               var regions = here.stream().map(Enum::name).toList();
-              var next = nextStop(vehicle);
+              var next = derived.next();
               return new RegionalBus(
                   b.vehicleId(), b.routeId(), b.routeCode(), b.direction(), b.tripId(),
                   round(b.busLatitude(), COORDINATE_PLACES), round(b.busLongitude(), COORDINATE_PLACES),
@@ -419,6 +420,7 @@ public class RegionService {
                   check, likely);
             })
             .toList();
+    if (perBus.size() > 2 * vehicles.size() + 64) perBus.keySet().retainAll(vehicles.keySet());
     List<RegionalBus> out = new ArrayList<>(rows.size());
     int excluded = 0, outsideArea = 0;
     for (Object row : rows) {
@@ -455,6 +457,65 @@ public class RegionService {
 
   record Next(
       TransitIndex.Stop stop, double distance, Double etaMinutes, String source, String basis) {}
+
+  /**
+   * Everything a bus's route check, likely routes and next stop are computed from. The static
+   * timetable and DTC's route list never change while running; the rest is here, so an equal key
+   * means an equal answer. LearnedRoute is compared by identity: the learner replaces the object
+   * whenever it learns a new path.
+   */
+  private record DerivedKey(
+      RealtimeSnapshot.Vehicle vehicle, TransitIndex.Route route, RouteLearner.LearnedRoute learned,
+      RouteLearner.LearnedRoute learnedForNext, Double heading, List<String> candidates) {
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof DerivedKey k
+          && Objects.equals(vehicle, k.vehicle) && route == k.route && learned == k.learned
+          && learnedForNext == k.learnedForNext && Objects.equals(heading, k.heading)
+          && Objects.equals(candidates, k.candidates);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(vehicle, System.identityHashCode(route), System.identityHashCode(learned), heading);
+    }
+  }
+
+  private record Derived(DerivedKey key, String check, List<String> likely, Next next) {}
+
+  /**
+   * vehicle id -> its last derived values. A bus that has not reported again since the previous
+   * answer (about half the fleet each feed update) is not worked out again.
+   */
+  private final Map<String, Derived> perBus = new java.util.concurrent.ConcurrentHashMap<>();
+
+  private final java.util.concurrent.atomic.AtomicLong reused = new java.util.concurrent.atomic.AtomicLong();
+  private final java.util.concurrent.atomic.AtomicLong recomputed = new java.util.concurrent.atomic.AtomicLong();
+
+  /** Running totals {reused, recomputed} of per-bus results, for diagnostics (Server-Timing). */
+  long[] reuseCounts() {
+    return new long[] {reused.get(), recomputed.get()};
+  }
+
+  private Derived derived(RealtimeSnapshot.Vehicle vehicle, TransitIndex.Route route) {
+    if (vehicle == null) return new Derived(null, CHECK_NO_STOPS, List.of(), null);
+    var forNext = transit.route(vehicle);
+    var key =
+        new DerivedKey(
+            vehicle, route, route == null ? null : learner.route(route.id()),
+            forNext == null ? null : learner.route(forNext.id()), learner.heading(vehicle.id()),
+            route == null ? List.of() : identifier.candidates(route.id()));
+    var known = perBus.get(vehicle.id());
+    if (known != null && key.equals(known.key())) {
+      reused.incrementAndGet();
+      return known;
+    }
+    recomputed.incrementAndGet();
+    String check = routeCheck(vehicle, route);
+    var fresh = new Derived(key, check, likelyRoutes(vehicle, route, check), nextStop(vehicle));
+    perBus.put(vehicle.id(), fresh);
+    return fresh;
+  }
 
   /**
    * A vehicle's position along its trip, measured on the straight lines joining consecutive stops.

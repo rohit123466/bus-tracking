@@ -45,7 +45,10 @@ public class RegionalBusesCache {
       /** Gzipped {@link #compact} form of the same answer. */
       byte[] compactGzip,
       /** Milliseconds the answer took to work out and encode. */
-      long buildMillis) {
+      long buildMillis,
+      /** Buses whose per-bus results were reused / worked out again for this answer (approximate). */
+      long reusedBuses,
+      long recomputedBuses) {
     /** ETag of the compact form: the same content hash, marked so caches keep the two apart. */
     public String compactEtag() {
       return etag.substring(0, etag.length() - 1) + "-c\"";
@@ -162,7 +165,9 @@ public class RegionalBusesCache {
   private Encoded build(Key key) {
     long started = System.nanoTime();
     long generation = live.generation(); // read first: a newer snapshot then forces a rebuild
+    long[] before = regions.reuseCounts();
     var result = regions.buses(key.filter(), key.routeNumber(), key.insideAreaOnly());
+    long[] after = regions.reuseCounts();
     byte[] body = json.writeValueAsBytes(result);
     var crc = new CRC32C();
     crc.update(body);
@@ -171,7 +176,7 @@ public class RegionalBusesCache {
     var encoded =
         new Encoded(
             generation, System.currentTimeMillis(), etag, body, gzip(body), compact,
-            (System.nanoTime() - started) / 1_000_000);
+            (System.nanoTime() - started) / 1_000_000, after[0] - before[0], after[1] - before[1]);
     announce(key, encoded);
     return encoded;
   }

@@ -48,7 +48,7 @@ public class FeedHealthService {
     private final long pollIntervalMs;
 
     public FeedHealthService(RealtimeSnapshot snapshot, DtcIngestionService ingestion,
-                             @Value("${dtc.poll.interval:4000}") long pollIntervalMs) {
+                             @Value("${dtc.poll.interval:2000}") long pollIntervalMs) {
         this.snapshot = snapshot;
         this.ingestion = ingestion;
         this.pollIntervalMs = pollIntervalMs;

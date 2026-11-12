@@ -113,7 +113,8 @@ public class TransitController {
     var response =
         regionalHeaders(ResponseEntity.status(unchanged ? HttpStatus.NOT_MODIFIED : HttpStatus.OK))
             .eTag(etag)
-            .header("Server-Timing", "build;dur=" + encoded.buildMillis());
+            .header("Server-Timing", "build;dur=" + encoded.buildMillis()
+                + ", reused;desc=" + encoded.reusedBuses() + ", recomputed;desc=" + encoded.recomputedBuses());
     if (unchanged) return response.build();
     byte[] body;
     if (compact) body = gzip ? encoded.compactGzip() : gunzip(encoded.compactGzip());

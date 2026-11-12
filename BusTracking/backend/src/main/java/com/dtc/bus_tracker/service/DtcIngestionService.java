@@ -72,7 +72,7 @@ public class DtcIngestionService {
     /** GPS timestamp last published per vehicle, so a fix is written to the store/history once. */
     private final Map<String, Long> publishedStamps = new ConcurrentHashMap<>();
 
-    @Scheduled(fixedDelayString = "${dtc.poll.interval:4000}")
+    @Scheduled(fixedDelayString = "${dtc.poll.interval:2000}")
     public void pollAndPublish() {
         try {
             if (routeCodes.isEmpty() || System.currentTimeMillis() - mappingsLoadedAt > 300000) {
