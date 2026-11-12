@@ -44,5 +44,13 @@ public class BusOccupancySummary {
     private LocalDateTime cameraLastScanAt;
     private int cameraMismatches;
 
+    /** EMPTY, OCCUPIED or UNKNOWN (no camera, or no reading yet). */
+    private String standingStatus;
+    /** Passengers standing in the standing area; the conductor is never counted. */
+    private int standingPassengers;
+    /** AVAILABLE or NOT_AVAILABLE, derived from free seats and the standing area. */
+    private String seatAvailability;
+    private String seatAvailabilityReason;
+
     private List<SegmentAvailability> segments;
 }

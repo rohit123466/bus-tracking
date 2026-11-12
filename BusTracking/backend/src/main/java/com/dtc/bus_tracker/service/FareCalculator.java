@@ -19,7 +19,7 @@ import java.math.RoundingMode;
 @RequiredArgsConstructor
 public class FareCalculator {
 
-    public static final String DISCLAIMER = "Demo value for this project - not an official DTC fare or concession.";
+    public static final String DISCLAIMER = "Configured fare for this system - not an official DTC fare or concession.";
 
     private final TicketingProperties properties;
 
@@ -33,15 +33,15 @@ public class FareCalculator {
             case SENIOR_CITIZEN -> {
                 BigDecimal payable = BigDecimal.valueOf(100L - fare.getSeniorConcessionPercent());
                 amount = standard.multiply(payable).divide(BigDecimal.valueOf(100));
-                label = "Demo senior citizen concession fare";
+                label = "Senior citizen concession fare";
             }
             case DIVYANGJAN -> {
                 amount = fare.getAccessibilityFare();
-                label = "Demo accessibility fare";
+                label = "Accessibility fare";
             }
             default -> {
                 amount = standard;
-                label = "Demo fare";
+                label = "Standard fare";
             }
         }
 

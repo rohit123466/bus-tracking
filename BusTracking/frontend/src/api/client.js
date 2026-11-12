@@ -193,6 +193,19 @@ export const reportCameraObservations = (busNumber, observations, source = 'MANU
     .post(`/conductor/buses/${encodeURIComponent(busNumber)}/camera/observations`, { observations, source })
     .then((res) => res.data);
 
+// Live console view: trip, seats, standing area, seat availability and ticket sales.
+export const getLiveOccupancy = (busNumber, signal) =>
+  client.get(`/conductor/buses/${encodeURIComponent(busNumber)}/live`, { signal }).then((res) => res.data);
+
+// Standing-area preset played on a camera bus; null pauses the preset feed (device input only).
+export const selectCameraPreset = (busNumber, presetId) =>
+  client.put(`/conductor/buses/${encodeURIComponent(busNumber)}/camera/preset`, { presetId }).then((res) => res.data);
+
+// One standing-area frame from a camera / IoT device: { sequence?, capturedAt?, source?, detections: [{ trackId, role?, confidence? }] }.
+export const reportStandingFrame = (busNumber, frame) =>
+  client.post(`/conductor/buses/${encodeURIComponent(busNumber)}/camera/standing-frames`, frame).then((res) => res.data);
+
+// Restores the preset tickets, passengers, camera scans and bus positions.
 export const resetTicketingDemo = () => client.post('/conductor/demo/reset').then((res) => res.data);
 
 /** Backend error message for display ("Seat 05 is already occupied from B to C."). */

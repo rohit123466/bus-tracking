@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Conductor ticketing: selling a seat for a route segment, completing a
@@ -54,11 +55,14 @@ public class TicketService {
     @Transactional
     public TicketResponse sell(SellTicketRequest request, String issuedBy) {
         String requestId = blankToNull(request.getRequestId());
-        rejectDuplicateRequest(requestId);
 
         TicketingJourney journey = journeyLoader.loadForUpdate(request.getBusNumber());
-        // Re-check under the trip lock: a concurrent duplicate is visible now.
-        rejectDuplicateRequest(requestId);
+        // Checked under the trip lock, so a concurrent submission of the same
+        // request is already visible here and can never issue a second ticket.
+        Optional<Ticket> earlier = requestId == null ? Optional.empty() : ticketRepository.findByRequestId(requestId);
+        if (earlier.isPresent()) {
+            return replay(journey, earlier.get());
+        }
 
         Passenger passenger = resolvePassenger(request);
         PassengerCategory category = passenger.getCategory();
@@ -189,7 +193,7 @@ public class TicketService {
         int current = journey.currentSequence();
         if (current == journey.lastSequence()) {
             throw TicketingException.conflict("Bus " + busNumber + " is already at its final stop ("
-                    + journey.stopName(current) + "). Reset the demo to start a new journey.");
+                    + journey.stopName(current) + "). Restore the preset data to start a new journey.");
         }
         int next = journey.stops().get(journey.indexOf(current) + 1).getStopSequence();
         journey.trip().setCurrentStopSequence(next);
@@ -224,12 +228,18 @@ public class TicketService {
                 .toList();
     }
 
-    private void rejectDuplicateRequest(String requestId) {
-        if (requestId == null) return;
-        ticketRepository.findByRequestId(requestId).ifPresent(existing -> {
+    /**
+     * The same requestId again (a double click, or a retry after a timeout):
+     * the sale already happened, so the original ticket is returned instead of
+     * issuing another or failing a request that in fact succeeded. A requestId
+     * reused for a different bus is a client bug and is rejected.
+     */
+    private TicketResponse replay(TicketingJourney journey, Ticket existing) {
+        if (!existing.getBus().getId().equals(journey.bus().getId())) {
             throw TicketingException.conflict("Duplicate ticket request: this request was already issued as ticket #"
-                    + existing.getTicketNumber() + ".");
-        });
+                    + existing.getTicketNumber() + " on bus " + existing.getBus().getVehicleId() + ".");
+        }
+        return toResponse(journey, existing).toBuilder().replayed(true).build();
     }
 
     private Passenger resolvePassenger(SellTicketRequest request) {
@@ -364,7 +374,7 @@ public class TicketService {
                 .completedAt(t.getCompletedAt())
                 .issuedBy(t.getIssuedBy())
                 .qrCodeBase64(qrPayload)
-                .qrDisclaimer("DEMO ONLY — Not an official DTC ticket. Not accepted for travel.")
+                .qrDisclaimer("Not an official DTC ticket. Not accepted for travel.")
                 .build();
     }
 

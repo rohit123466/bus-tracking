@@ -80,9 +80,9 @@ export default function TicketCard({ ticket, onComplete, onCancel, busy, highlig
 function DemoQR({ payload, disclaimer }) {
   return (
     <details className="qr-demo-section">
-      <summary className="qr-demo-toggle">🎟️ Show Demo QR</summary>
+      <summary className="qr-demo-toggle">Show ticket QR</summary>
       <div className="qr-demo-body">
-        <div className="qr-demo-visual" aria-label="Demo QR code pattern" role="img">
+        <div className="qr-demo-visual" aria-label="Ticket QR payload" role="img">
           <code className="qr-payload">{payload}</code>
         </div>
         <p className="qr-disclaimer">{disclaimer}</p>

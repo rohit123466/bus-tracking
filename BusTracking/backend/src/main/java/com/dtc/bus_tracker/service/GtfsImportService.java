@@ -171,8 +171,8 @@ public class GtfsImportService {
      * (returning false) when tickets were sold on an imported trip, since those rows reference it.
      */
     private boolean clearImportedFeed() {
-        String imported = "SELECT id FROM routes WHERE route_code IS NULL OR route_code <> '"
-                + TicketingDemoDataService.ROUTE_CODE + "'";
+        String imported = "SELECT id FROM routes WHERE route_code IS NULL OR route_code NOT IN ('"
+                + TicketingDemoDataService.ROUTE_CODE + "', '" + TicketingDemoDataService.LEGACY_ROUTE_CODE + "')";
         String importedTrips = "SELECT id FROM trips WHERE route_id IN (" + imported + ")";
         Integer tickets = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM tickets WHERE trip_id IN (" + importedTrips + ")", Integer.class);
