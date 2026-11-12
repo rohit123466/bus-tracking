@@ -45,3 +45,28 @@ Measured against the code before this change on the same machine, feed and recor
 
 About 20 s of each fix's age comes before the feed is published (device → OTD) and cannot be
 changed here. Street-level map updates (labelled pins) showed no measurable main-thread change.
+
+## Results, 12 Nov 2026 (local, Windows, live OTD feed, 1,280–1,600 buses shown)
+
+New on `/buses/regional`: `format=compact` (same buses and fields as columns) and
+`known=<ETag>&waitMs=<n>` (the server holds the request until the answer changes; 204 after
+the wait). The Live Map uses both. `perf/load.mjs` crashes under Node 24 (`assert(!this.paused)`
+in fetch when Tomcat closes a keep-alive connection), so the load rows below come from the same
+script on `node:http`, run on both builds.
+
+| | Before | After |
+|---|---|---|
+| Buses returned, same feed snapshot, both servers sampled at once | identical sets | identical sets (only buses aged 120–128 s differ, both ways: answers built seconds apart at the freshness cut-off) |
+| Wire size per poll (gzip) | 61–66 KB | 51–53 KB plain, **37–41 KB compact** |
+| Live Map requests per minute | ~7 timed polls | ~16 held requests, one per feed change |
+| Fix on server → in the browser tab: mean / p50 / p90 | 1.67 / 0.6 / 4.5 s | **0.01 / 0 / 0 s** |
+| Overview map per update: main-thread / script | 182 / 88 ms | 112 / 37 ms |
+| Overview map per update: `setStyle` / `on` | 1,452 / 1,446 | 876 / 484 |
+| 20 clients every 2 s, quiet machine (other build stopped): p50 / p95 / p99 | 5.4 / 9.8 / 280 ms | 3.1 / 5.1 / 26 ms |
+| …server CPU | 45.5 s/min* | 18.7 s/min |
+
+\* The baseline had been running only ~10 minutes, when `RouteIdentifier` re-matching still
+loads the CPU, so part of that gap is warm-up. With both builds running at once the machine was
+saturated and the tails of both were hundreds of ms (p99 400 vs 560–850 ms), i.e. not a usable
+comparison. Server latency was already single-digit ms at p50 before this change; the gains here
+are bytes on the wire, time to the screen and map script time.
