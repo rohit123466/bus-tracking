@@ -78,6 +78,8 @@ public class RegionService {
   /** Lenient: straight lines between stops cut corners that the road goes around. */
   static final double ROUTE_CHECK_METERS = 500;
 
+  /** Null fields are left out of the JSON: about a third of them are null on a typical poll. */
+  @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
   public record RegionalBus(
       String vehicleId,
       String routeId,
@@ -381,41 +383,48 @@ public class RegionService {
       }
     }
 
-    List<RegionalBus> out = new ArrayList<>();
+    // Each bus is worked out on its own (route check, likely routes, next stop) from read-only
+    // data, so the fleet is spread over the spare cores; the list keeps the candidates' order.
+    final Object excludedByRegion = new Object(), outside = new Object();
+    List<Object> rows =
+        candidates.parallelStream()
+            .<Object>map(b -> {
+              var vehicle = vehicles.get(b.vehicleId());
+              var route = index.routes.get(b.routeId());
+              String check = vehicle == null ? CHECK_NO_STOPS : routeCheck(vehicle, route);
+              var likely = vehicle == null ? List.<String>of() : likelyRoutes(vehicle, route, check);
+              if (!eligible.contains(b.routeCode()) && likely.stream().noneMatch(eligible::contains))
+                return excludedByRegion;
+              if (insideAreaOnly && !insideArea(b.busLatitude(), b.busLongitude(), filter))
+                return outside;
+              EnumSet<TransitIndex.Region> here = EnumSet.noneOf(TransitIndex.Region.class);
+              for (var n : concat(b.routeCode(), likely)) {
+                var r = byNumber.get(n);
+                if (r != null) here.addAll(r);
+              }
+              var regions = here.stream().map(Enum::name).toList();
+              var next = nextStop(vehicle);
+              return new RegionalBus(
+                  b.vehicleId(), b.routeId(), b.routeCode(), b.direction(), b.tripId(),
+                  round(b.busLatitude(), COORDINATE_PLACES), round(b.busLongitude(), COORDINATE_PLACES),
+                  round(b.speedKmh(), 1),
+                  b.lastUpdatedEpochSeconds(), b.mappingSource(),
+                  round(b.distanceFromShapeMeters(), 1), b.offRouteFlag(), regions,
+                  next == null ? null : next.stop().id(),
+                  next == null ? null : next.stop().name(),
+                  next == null ? null : next.source(),
+                  next == null ? null : next.distance(),
+                  next == null ? null : round(next.etaMinutes(), 2),
+                  next == null || next.etaMinutes() == null ? null : next.basis(),
+                  check, likely);
+            })
+            .toList();
+    List<RegionalBus> out = new ArrayList<>(rows.size());
     int excluded = 0, outsideArea = 0;
-    for (var b : candidates) {
-      var vehicle = vehicles.get(b.vehicleId());
-      var route = index.routes.get(b.routeId());
-      String check = vehicle == null ? CHECK_NO_STOPS : routeCheck(vehicle, route);
-      var likely = vehicle == null ? List.<String>of() : likelyRoutes(vehicle, route, check);
-      if (!eligible.contains(b.routeCode()) && likely.stream().noneMatch(eligible::contains)) {
-        excluded++;
-        continue;
-      }
-      if (insideAreaOnly && !insideArea(b.busLatitude(), b.busLongitude(), filter)) {
-        outsideArea++;
-        continue;
-      }
-      EnumSet<TransitIndex.Region> here = EnumSet.noneOf(TransitIndex.Region.class);
-      for (var n : concat(b.routeCode(), likely)) {
-        var r = byNumber.get(n);
-        if (r != null) here.addAll(r);
-      }
-      var regions = here.stream().map(Enum::name).toList();
-      var next = nextStop(vehicle);
-      out.add(
-          new RegionalBus(
-              b.vehicleId(), b.routeId(), b.routeCode(), b.direction(), b.tripId(),
-              round(b.busLatitude(), 6), round(b.busLongitude(), 6), round(b.speedKmh(), 1),
-              b.lastUpdatedEpochSeconds(), b.mappingSource(),
-              round(b.distanceFromShapeMeters(), 1), b.offRouteFlag(), regions,
-              next == null ? null : next.stop().id(),
-              next == null ? null : next.stop().name(),
-              next == null ? null : next.source(),
-              next == null ? null : next.distance(),
-              next == null ? null : round(next.etaMinutes(), 2),
-              next == null || next.etaMinutes() == null ? null : next.basis(),
-              check, likely));
+    for (Object row : rows) {
+      if (row == excludedByRegion) excluded++;
+      else if (row == outside) outsideArea++;
+      else out.add((RegionalBus) row);
     }
     List<String> warnings = new ArrayList<>(all.warnings());
     // transit.buses() says no bus carries the number; some do, by their likely route.
@@ -550,10 +559,11 @@ public class RegionService {
   }
 
   /**
-   * The feed's positions are float32 (~0.2 m steps at Delhi's latitude), so 6 decimal places
-   * (~0.1 m) keep every real digit; the remaining digits of the widened double were noise that
-   * made up about a quarter of the compressed /buses/regional answer.
+   * Decimal places of a position on the wire: 5 places are ~1.1 m, well inside GPS error, and one
+   * digit fewer per coordinate than the feed's float32 steps (~0.2 m) would need.
    */
+  static final int COORDINATE_PLACES = 5;
+
   static double round(double value, int places) {
     double scale = Math.pow(10, places);
     return Math.round(value * scale) / scale;

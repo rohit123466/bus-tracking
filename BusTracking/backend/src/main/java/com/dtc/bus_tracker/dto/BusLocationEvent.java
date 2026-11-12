@@ -9,6 +9,8 @@ import java.io.Serializable;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+// Fields the feed does not report (speed, bearing, wheelchair space) are left out of the JSON.
+@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public class BusLocationEvent implements Serializable {
     private String vehicleId;
     private Double latitude;

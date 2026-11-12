@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.async.DeferredResult;
 import org.springframework.web.server.ResponseStatusException;
 
 /** GTFS string IDs deliberately namespaced separately from legacy numeric database IDs. */
@@ -59,29 +60,81 @@ public class TransitController {
    * {@link RegionService.RegionalBuses}, served pre-encoded from {@link RegionalBusesCache}: gzip
    * when the client accepts it, 304 when its ETag still matches. {@value #NEXT_UPDATE_HEADER} says
    * how many milliseconds until the server expects its next feed snapshot.
+   *
+   * <p>{@code format=compact} sends the same buses and fields as columns
+   * ({@link RegionalBusesCache#compact}), about 40% fewer bytes.
+   *
+   * <p>{@code known=<ETag of the answer the client holds>&waitMs=<n>} holds the request until the
+   * answer differs from that one, at most {@code waitMs} (capped at {@value #MAX_WAIT_MS} ms), and
+   * then sends it; 204 if nothing changed in that time. A client that has an answer therefore
+   * gets the next one as soon as it exists instead of guessing when to poll.
    */
   @GetMapping("/buses/regional")
-  public ResponseEntity<byte[]> regionalBuses(
+  public Object regionalBuses(
       @RequestParam(defaultValue = "ANY") String region,
       @RequestParam(defaultValue = "") String routeNumber,
       @RequestParam(defaultValue = "true") boolean insideAreaOnly,
+      @RequestParam(defaultValue = "") String format,
+      @RequestParam(defaultValue = "") String known,
+      @RequestParam(defaultValue = "0") long waitMs,
       @RequestHeader(value = HttpHeaders.ACCEPT_ENCODING, required = false) String acceptEncoding,
       @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
-    var encoded = regionalCache.get(RegionService.Filter.parse(region), routeNumber, insideAreaOnly);
-    var response =
-        ResponseEntity.status(
-                encoded.etag().equals(ifNoneMatch) ? HttpStatus.NOT_MODIFIED : HttpStatus.OK)
-            .eTag(encoded.etag())
+    var filter = RegionService.Filter.parse(region);
+    boolean compact = "compact".equalsIgnoreCase(format.trim());
+    boolean gzip = acceptEncoding != null && acceptEncoding.toLowerCase(Locale.ROOT).contains("gzip");
+    var encoded = regionalCache.get(filter, routeNumber, insideAreaOnly);
+    if (waitMs <= 0 || !encoded.matches(known)) return regionalAnswer(encoded, compact, gzip, ifNoneMatch);
+
+    var held = new DeferredResult<ResponseEntity<byte[]>>(Math.min(waitMs, MAX_WAIT_MS));
+    Runnable withdraw =
+        regionalCache.await(
+            filter, routeNumber, insideAreaOnly, known,
+            next -> held.setResult(regionalAnswer(next, compact, gzip, null)));
+    held.onTimeout(() -> held.setResult(regionalHeaders(ResponseEntity.noContent()).build()));
+    held.onError(t -> withdraw.run());
+    held.onCompletion(withdraw);
+    return held;
+  }
+
+  private ResponseEntity.BodyBuilder regionalHeaders(ResponseEntity.HeadersBuilder<?> response) {
+    return (ResponseEntity.BodyBuilder)
+        response
             // Stored but always revalidated: never shown stale, unchanged answers cost a 304.
             .cacheControl(CacheControl.noCache())
             .varyBy(HttpHeaders.ACCEPT_ENCODING)
-            .header(NEXT_UPDATE_HEADER, String.valueOf(regionalCache.nextUpdateInMs()));
-    if (encoded.etag().equals(ifNoneMatch)) return response.build();
-    boolean gzip = acceptEncoding != null && acceptEncoding.toLowerCase(Locale.ROOT).contains("gzip");
-    if (gzip) response.header(HttpHeaders.CONTENT_ENCODING, "gzip");
-    return response.contentType(MediaType.APPLICATION_JSON).body(gzip ? encoded.gzip() : encoded.json());
+            .header(NEXT_UPDATE_HEADER, String.valueOf(regionalCache.nextUpdateInMs()))
+            .header(WAIT_HEADER, String.valueOf(MAX_WAIT_MS));
   }
 
+  private ResponseEntity<byte[]> regionalAnswer(
+      RegionalBusesCache.Encoded encoded, boolean compact, boolean gzip, String ifNoneMatch) {
+    String etag = compact ? encoded.compactEtag() : encoded.etag();
+    boolean unchanged = etag.equals(ifNoneMatch);
+    var response =
+        regionalHeaders(ResponseEntity.status(unchanged ? HttpStatus.NOT_MODIFIED : HttpStatus.OK))
+            .eTag(etag)
+            .header("Server-Timing", "build;dur=" + encoded.buildMillis());
+    if (unchanged) return response.build();
+    byte[] body;
+    if (compact) body = gzip ? encoded.compactGzip() : gunzip(encoded.compactGzip());
+    else body = gzip ? encoded.gzip() : encoded.json();
+    if (gzip) response.header(HttpHeaders.CONTENT_ENCODING, "gzip");
+    return response.contentType(MediaType.APPLICATION_JSON).body(body);
+  }
+
+  /** Only for the rare client that asks for the compact form without accepting gzip. */
+  private static byte[] gunzip(byte[] gz) {
+    try (var in = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(gz))) {
+      return in.readAllBytes();
+    } catch (java.io.IOException e) {
+      throw new java.io.UncheckedIOException(e);
+    }
+  }
+
+  /** Longest a {@code waitMs} request is held; under the idle limits of common proxies. */
+  public static final long MAX_WAIT_MS = 25000;
+  /** Tells clients the server can hold a request ({@code known} + {@code waitMs}), and for how long. */
+  public static final String WAIT_HEADER = "X-Wait-Max";
   public static final String NEXT_UPDATE_HEADER = "X-Next-Update-In";
 
   /** Nearby stops inside the area served by region-eligible routes, with upcoming buses. */

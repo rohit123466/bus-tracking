@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Circle, CircleMarker, Marker, Polyline, Tooltip } from 'react-leaflet';
+import L from 'leaflet';
+import { Circle, CircleMarker, Marker, Polyline, Tooltip, useMap } from 'react-leaflet';
 import { busFreshness, routeUnconfirmed, shownRoute } from '../../utils/liveMap';
 import { busPin, stopPin, mePin } from '../../utils/mapIcons';
 
@@ -29,19 +30,64 @@ function useClick(onClick, arg) {
   return useMemo(() => ({ click: () => latest.current(arg) }), [arg]);
 }
 
-const BusDot = memo(function BusDot({ id, lat, lng, live, unconfirmed, label, colors, onSelect }) {
-  const center = usePosition(lat, lng);
-  const handlers = useClick(onSelect, id);
-  // Unconfirmed route: hollow ring instead of a filled dot.
-  const style = unconfirmed
+function dotStyle(unconfirmed, live, colors) {
+  return unconfirmed
     ? pathStyle(`ring|${colors.text}|${colors.surface}`, () => ({ color: colors.text, weight: 2, dashArray: '2 2', fillColor: colors.surface, fillOpacity: 1 }))
     : pathStyle(`dot|${colors.surface}|${live ? colors.live : colors.delayed}`, () => ({ color: colors.surface, weight: 1.5, fillOpacity: 1, fillColor: live ? colors.live : colors.delayed }));
-  return (
-    <CircleMarker center={center} radius={5} pathOptions={style} eventHandlers={handlers}>
-      <Tooltip direction="top" offset={TOOLTIP_OFFSET}>{label}</Tooltip>
-    </CircleMarker>
-  );
-});
+}
+
+/**
+ * Every overview bus as a canvas dot, kept in a pool by vehicleId and updated in place: a bus
+ * that moved gets one setLatLng, one that changed state one setStyle, a new label one
+ * setTooltipContent; nothing else is touched. One click listener on the group serves every dot.
+ * Dots of buses no longer in `dots` (gone stale, filtered out, now a pin) are removed.
+ */
+function BusDots({ dots, colors, onSelect }) {
+  const map = useMap();
+  const group = useRef(null);
+  const pool = useRef(new Map());
+  const latest = useRef(onSelect);
+  useEffect(() => { latest.current = onSelect; });
+
+  useEffect(() => {
+    const g = L.featureGroup().addTo(map);
+    g.on('click', ev => latest.current(ev.layer?.options?.vehicleId));
+    group.current = g;
+    const markers = pool.current;
+    return () => { g.off(); g.remove(); markers.clear(); group.current = null; };
+  }, [map]);
+
+  useEffect(() => {
+    const g = group.current;
+    if (!g) return;
+    const markers = pool.current;
+    const keep = new Set();
+    for (const d of dots) {
+      keep.add(d.id);
+      const style = dotStyle(d.unconfirmed, d.live, colors);
+      let m = markers.get(d.id);
+      if (!m) {
+        m = L.circleMarker([d.lat, d.lng], { ...style, radius: 5, vehicleId: d.id });
+        m.bindTooltip(d.label, { direction: 'top', offset: TOOLTIP_OFFSET });
+        m._dot = { lat: d.lat, lng: d.lng, style, label: d.label };
+        markers.set(d.id, m);
+        g.addLayer(m);
+        continue;
+      }
+      const last = m._dot;
+      if (last.lat !== d.lat || last.lng !== d.lng) { m.setLatLng([d.lat, d.lng]); last.lat = d.lat; last.lng = d.lng; }
+      if (last.style !== style) { m.setStyle(style); last.style = style; }
+      if (last.label !== d.label) { m.setTooltipContent(d.label); last.label = d.label; }
+    }
+    for (const [id, m] of markers) {
+      if (keep.has(id)) continue;
+      g.removeLayer(m);
+      markers.delete(id);
+    }
+  }, [dots, colors]);
+
+  return null;
+}
 
 const BusPin = memo(function BusPin({ id, lat, lng, icon, selected, label, onSelect }) {
   const position = usePosition(lat, lng);
@@ -53,12 +99,13 @@ const BusPin = memo(function BusPin({ id, lat, lng, icon, selected, label, onSel
  * Dense-map strategy instead of clustering: below DETAIL_ZOOM every bus is a small canvas dot
  * (hundreds render cheaply and stay clickable); from DETAIL_ZOOM, labelled pins are drawn only for
  * buses in or near the viewport. The selected bus is always a labelled pin. Buses whose GPS fix is
- * older than 2 minutes never reach this layer (visibleBuses drops them). Markers are keyed by
- * vehicleId and only receive primitive props, so a bus that did not move or change is skipped.
+ * older than 2 minutes never reach this layer (visibleBuses drops them). Dots are pooled by
+ * vehicleId outside React (BusDots); pins are keyed by vehicleId and only receive primitive props,
+ * so a bus that did not move or change is skipped either way.
  */
 export function BusLayer({ buses, now, view, selectedId, onSelect, colors }) {
   const detailed = view.zoom >= DETAIL_ZOOM;
-  const area = view.bounds?.pad(0.25);
+  const area = useMemo(() => view.bounds?.pad(0.25), [view.bounds]);
   const latest = useRef(onSelect);
   useEffect(() => { latest.current = onSelect; });
   const select = useCallback(id => latest.current(id), []);
@@ -67,31 +114,40 @@ export function BusLayer({ buses, now, view, selectedId, onSelect, colors }) {
     () => ({ live: colors.live, delayed: colors.delayed, surface: colors.surface, text: colors.text }),
     [colors.live, colors.delayed, colors.surface, colors.text],
   );
-  return buses.map(b => {
-    const freshness = busFreshness(b, now);
-    const selected = b.vehicleId === selectedId;
-    const unconfirmed = routeUnconfirmed(b);
-    const shown = shownRoute(b);
-    const label = shown !== b.routeCode
-      ? `Likely route ${shown} (feed says ${b.routeCode})`
-      : `Route ${b.routeCode}${unconfirmed ? ' (unconfirmed)' : ''}`;
-    if (!selected && !detailed) {
-      return (
-        <BusDot
-          key={b.vehicleId} id={b.vehicleId} lat={b.busLatitude} lng={b.busLongitude}
-          live={freshness === 'LIVE'} unconfirmed={unconfirmed} colors={dotColors} onSelect={select}
-          label={`${label}${freshness === 'DELAYED' ? ' · GPS delayed' : ''}`}
-        />
+  // One pass over the fleet: canvas dots for the overview, labelled pins for the rest.
+  const { dots, pins } = useMemo(() => {
+    const dots = [], pins = [];
+    for (const b of buses) {
+      const freshness = busFreshness(b, now);
+      const selected = b.vehicleId === selectedId;
+      const unconfirmed = routeUnconfirmed(b);
+      const shown = shownRoute(b);
+      const label = shown !== b.routeCode
+        ? `Likely route ${shown} (feed says ${b.routeCode})`
+        : `Route ${b.routeCode}${unconfirmed ? ' (unconfirmed)' : ''}`;
+      if (!selected && !detailed) {
+        dots.push({
+          id: b.vehicleId, lat: b.busLatitude, lng: b.busLongitude, live: freshness === 'LIVE', unconfirmed,
+          label: `${label}${freshness === 'DELAYED' ? ' · GPS delayed' : ''}`,
+        });
+        continue;
+      }
+      if (!selected && area && !area.contains([b.busLatitude, b.busLongitude])) continue;
+      pins.push(
+        <BusPin
+          key={b.vehicleId} id={b.vehicleId} lat={b.busLatitude} lng={b.busLongitude} selected={selected}
+          icon={busPin(shown, freshness, selected, unconfirmed, shown !== b.routeCode)} label={label} onSelect={select}
+        />,
       );
     }
-    if (!selected && area && !area.contains([b.busLatitude, b.busLongitude])) return null;
-    return (
-      <BusPin
-        key={b.vehicleId} id={b.vehicleId} lat={b.busLatitude} lng={b.busLongitude} selected={selected}
-        icon={busPin(shown, freshness, selected, unconfirmed, shown !== b.routeCode)} label={label} onSelect={select}
-      />
-    );
-  });
+    return { dots, pins };
+  }, [buses, now, selectedId, detailed, area, select]);
+  return (
+    <>
+      <BusDots dots={dots} colors={dotColors} onSelect={select} />
+      {pins}
+    </>
+  );
 }
 
 /**

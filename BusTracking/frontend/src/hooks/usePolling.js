@@ -4,7 +4,9 @@ import { classifyError, isAbort } from '../api/errors';
 const EMPTY = { data: undefined, error: null, loading: false, updatedAt: null };
 
 /**
- * Fetches `fetcher(signal)` now and then every `interval` ms while `key` stays the same.
+ * Fetches `fetcher(signal, previous)` now and then every `interval` ms while `key` stays the
+ * same. `previous` is the data of the last successful fetch for this key (undefined on the first),
+ * for fetchers that can ask the server for "whatever comes after this".
  *
  * - A new `key` aborts the request in flight and starts over (data is cleared unless
  *   `keepPrevious`), so a stale response can never overwrite a newer selection.
@@ -29,7 +31,7 @@ export default function usePolling(key, fetcher, {
 
   useEffect(() => {
     if (!active) return undefined;
-    let disposed = false, timer = null, ctrl = null, inFlight = false, failures = 0, lastRun = 0;
+    let disposed = false, timer = null, ctrl = null, inFlight = false, failures = 0, lastRun = 0, previous;
     const hidden = () => pauseWhenHidden && typeof document !== 'undefined' && document.hidden;
 
     setState(s => (s.key === key || keepPrevious)
@@ -49,9 +51,10 @@ export default function usePolling(key, fetcher, {
       ctrl = new AbortController();
       let next = interval;
       try {
-        const data = await fetcherRef.current(ctrl.signal);
+        const data = await fetcherRef.current(ctrl.signal, previous);
         if (disposed) return;
         failures = 0;
+        previous = data;
         if (nextDelayRef.current) next = nextDelayRef.current(data);
         setState({ data, error: null, loading: false, updatedAt: Date.now(), key });
       } catch (err) {

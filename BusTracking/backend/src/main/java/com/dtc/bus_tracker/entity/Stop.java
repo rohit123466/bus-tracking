@@ -8,7 +8,8 @@ import lombok.NoArgsConstructor;
 import java.util.ArrayList;
 import java.util.List;
 @Entity
-@Table(name = "stops")
+// Bounding-box lookups (stops near a position) can use the latitude range of this index.
+@Table(name = "stops", indexes = @Index(name = "idx_stops_spatial", columnList = "latitude, longitude"))
 @Builder  // ← ADD THIS
 @NoArgsConstructor
 @AllArgsConstructor

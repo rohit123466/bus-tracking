@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { expandRegional } from '../utils/regionalWire';
 import { classifyError, isAbort } from './errors';
 import { reportFailure, reportRequestStart, reportSuccess } from './connection';
 import { groupStands } from '../utils/liveMap';
@@ -274,6 +275,14 @@ export const transitGet = (path, params = {}, signal) => sharedGet(`/transit${pa
 
 // Answer -> ms until the server expects its next feed snapshot (X-Next-Update-In), if it said.
 const nextUpdateHints = new WeakMap();
+// /buses/regional answer -> { etag, waitMax }: which answer it is, and how long the server is
+// willing to hold a request for the next one (X-Wait-Max; absent on servers that cannot).
+const regionalAnswers = new WeakMap();
+
+/** How long the Live Map asks the server to hold a request for the next answer. */
+const REGIONAL_WAIT_MS = 20000;
+/** Pause between getting an answer and asking for the next, so the map draws first. */
+const REGIONAL_WAIT_GAP_MS = 250;
 
 /** The answer's data, remembering its X-Next-Update-In hint for regionalPollDelay. */
 function withUpdateHint(res) {
@@ -282,9 +291,32 @@ function withUpdateHint(res) {
   return res.data;
 }
 
-/** Live buses on North / North-West routes currently inside the area (optionally one route). */
-export const getRegionalBuses = ({ region = 'ANY', routeNumber = '' } = {}, signal) =>
-  sharedResponse('/transit/buses/regional', { region, routeNumber }, signal).then(withUpdateHint);
+/**
+ * Live buses on North / North-West routes currently inside the area (optionally one route).
+ *
+ * Asks for the compact encoding (expanded here into the usual { buses: [...] } shape). With
+ * `previous` — the answer this caller already shows — and a server that supports it, the request
+ * is held by the server until the answer changes, so new positions arrive as soon as they exist
+ * rather than at the next guess of a poll; if nothing changed in time, `previous` is returned
+ * as is. usePolling passes `previous` to its fetcher.
+ */
+export const getRegionalBuses = ({ region = 'ANY', routeNumber = '' } = {}, signal, previous) => {
+  const held = previous ? regionalAnswers.get(previous) : null;
+  const wait = held?.etag && held.waitMax > 0
+    ? { known: held.etag.replace(/"/g, ''), waitMs: Math.min(held.waitMax, REGIONAL_WAIT_MS) }
+    : {};
+  return sharedResponse('/transit/buses/regional', { region, routeNumber, format: 'compact', ...wait }, signal)
+    .then((res) => {
+      // 204: nothing changed while the server held the request. Keep showing what we have.
+      if (res.status === 204 && previous) return previous;
+      const data = expandRegional(res.data);
+      const waitMax = Number(res.headers?.['x-wait-max']);
+      if (data && typeof data === 'object') {
+        regionalAnswers.set(data, { etag: res.headers?.etag, waitMax: Number.isFinite(waitMax) ? waitMax : 0 });
+      }
+      return withUpdateHint({ headers: res.headers, data });
+    });
+};
 
 /**
  * Bus stands whose name matches `query` (partial, any case), each stand once:
@@ -316,11 +348,15 @@ export const getStandRouteLive = ({ pickup, routeIds }, signal) =>
   sharedResponse('/transit/stands/routes/live', { pickup, routeIds: routeIds.join(',') }, signal).then(withUpdateHint);
 
 /**
- * When to poll /buses/regional again: just after the server's next feed snapshot is due (it
- * builds the answer right then), instead of a fixed 10 s that lands up to 10 s after new
- * positions. Falls back to `fallback` for a server that sends no hint.
+ * When to poll /buses/regional again. For an answer from a server that holds requests until the
+ * next change (see getRegionalBuses): almost at once. Otherwise just after the server's next
+ * feed snapshot is due (it builds the answer right then), instead of a fixed 10 s that lands up
+ * to 10 s after new positions. Falls back to `fallback` for a server that sends no hint.
  */
 export function regionalPollDelay(data, fallback = 10000) {
+  // The server holds the next request until there is something new: ask again right away.
+  const held = regionalAnswers.get(data);
+  if (held?.etag && held.waitMax > 0) return REGIONAL_WAIT_GAP_MS;
   const hint = nextUpdateHints.get(data);
   if (hint == null) return fallback;
   return Math.min(15000, Math.max(2000, hint + 1000));

@@ -19,6 +19,8 @@ import java.util.List;
  */
 @Getter
 @Builder
+// Unset fields (no trip running, no camera, no ticket yet) are left out of the JSON.
+@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public class LiveOccupancyResponse {
     private String busNumber;
     private String busTypeLabel;

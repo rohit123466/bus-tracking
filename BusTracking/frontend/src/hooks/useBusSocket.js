@@ -25,13 +25,21 @@ export default function useBusSocket({ enabled = true } = {}) {
     let everConnected = false;
     // A replaced client still reports its own close after cleanup; it must not mark the new one down.
     let disposed = false;
+    const hidden = () => typeof document !== 'undefined' && document.hidden;
     const flush = () => {
       timer = null;
+      // A hidden tab draws nothing: frames keep collecting (latest per bus) and are applied in
+      // one go when the tab is shown again, instead of re-rendering the map unseen 4 times a second.
+      if (hidden()) return;
       const batch = pending;
       pending = {};
       setPositions((prev) => ({ ...prev, ...batch }));
       setLastMessageAt(Date.now());
     };
+    const shown = () => {
+      if (!hidden() && !timer && Object.keys(pending).length) flush();
+    };
+    document.addEventListener('visibilitychange', shown);
     const lost = () => {
       if (disposed) return;
       setConnected(false);
@@ -65,6 +73,7 @@ export default function useBusSocket({ enabled = true } = {}) {
     return () => {
       disposed = true;
       clearTimeout(timer);
+      document.removeEventListener('visibilitychange', shown);
       stompClient.deactivate();
     };
   }, [enabled]);
