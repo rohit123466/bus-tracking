@@ -5,7 +5,9 @@ import lombok.*;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "stop_times")
+// A trip's stops are always read in order (findByTrip_IdOrderByStopSequenceAsc); with this index
+// that is one range scan that already has the departure time, instead of a filter plus a sort.
+@Table(name = "stop_times", indexes = @Index(name = "idx_stop_times_route_trip", columnList = "trip_id, stop_sequence, departure_time"))
 @Getter
 @Setter
 @NoArgsConstructor

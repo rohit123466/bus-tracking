@@ -88,8 +88,9 @@ export default function ExplorePage() {
   }, [setParams]);
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  // Polls again just after the server's next feed snapshot is due (≈ every 11 s), else every 10 s.
-  const busesQ = usePolling(`${region}|${route}`, s => getRegionalBuses({ region, routeNumber: route }, s), { interval: 10000, nextDelay: regionalPollDelay });
+  // Held by the server until the next feed snapshot changes the answer (see getRegionalBuses);
+  // against a server that cannot hold requests, polls just after its next snapshot is due.
+  const busesQ = usePolling(`${region}|${route}`, (s, prev) => getRegionalBuses({ region, routeNumber: route }, s, prev), { interval: 10000, nextDelay: regionalPollDelay });
   // Re-filtered against the ticking clock: a position older than 2 min disappears even if polling stalls.
   const allBuses = useMemo(() => visibleBuses(busesQ.data?.buses ?? [], route, now), [busesQ.data, route, now]);
   const liveIds = useMemo(() => new Set(allBuses.map(b => b.vehicleId)), [allBuses]);

@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 
 const [frontend, distDir, label, api, seconds = '90', full] = process.argv.slice(2);
 const { chromium } = await import(pathToFileURL(path.join(frontend, 'node_modules/@playwright/test/index.mjs')).href);
+// The app asks for the compact encoding of /buses/regional; read its responses the way it does.
+const { expandRegional } = await import(pathToFileURL(path.join(frontend, 'src/utils/regionalWire.js')).href);
 const PORT = 5190, BASE = `http://127.0.0.1:${PORT}`;
 const REGIONAL = `${api}/transit/buses/regional?region=ANY&routeNumber=`;
 const server = spawn(process.execPath, [path.join(frontend, 'node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort', '--outDir', distDir], { cwd: frontend, stdio: 'ignore' });
@@ -48,7 +50,7 @@ try {
     const h = await res.allHeaders();
     const route = new URL(res.url()).searchParams.get('routeNumber');
     polls.push({ at, status: res.status(), hint: h['x-next-update-in'], route });
-    if (!route) try { for (const k of fixes(await res.json())) if (!received.has(k)) received.set(k, at); } catch { /* 304 without body */ }
+    if (!route) try { for (const k of fixes(expandRegional(await res.json()))) if (!received.has(k)) received.set(k, at); } catch { /* 304 without body */ }
   });
   await page.goto(BASE);
   await page.getByText(/^Live feed ·/).waitFor({ timeout: 60000 });
@@ -99,7 +101,7 @@ try {
     // Route filter on real data: every bus returned is that route (by feed number or likely route).
     const routeResp = page.waitForResponse(r => r.url().includes('/transit/buses/regional') && r.url().includes('routeNumber=901'));
     await page.goto(`${BASE}/?route=901`);
-    const body = await (await routeResp).json();
+    const body = expandRegional(await (await routeResp).json());
     const wrong = body.buses.filter(b => b.routeCode !== '901' && !(b.likelyRoutes ?? []).includes('901'));
     assert.equal(wrong.length, 0, 'route filter returned other routes');
     await page.getByRole('heading', { name: 'Route 901' }).waitFor();

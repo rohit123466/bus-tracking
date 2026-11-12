@@ -22,8 +22,13 @@ public class CorsConfig {
                         .allowedOrigins(allowedOrigins)
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
-                        // Read by the Live Map to poll just after the next feed snapshot.
-                        .exposedHeaders(TransitController.NEXT_UPDATE_HEADER);
+                        // Read by the Live Map: when the next feed snapshot is due, which answer
+                        // it holds (ETag) and whether the server can hold a request for the next.
+                        .exposedHeaders(TransitController.NEXT_UPDATE_HEADER, TransitController.WAIT_HEADER,
+                                "ETag", "Server-Timing")
+                        // Browsers repeat the OPTIONS pre-flight of a cross-origin call once this
+                        // expires; a day is the most any of them honours.
+                        .maxAge(86400);
             }
         };
     }

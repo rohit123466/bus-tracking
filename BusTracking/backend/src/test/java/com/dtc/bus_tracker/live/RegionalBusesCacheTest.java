@@ -183,12 +183,136 @@ class RegionalBusesCacheTest {
   }
 
   @Test
-  void positionsAreRoundedToTheFeedsPrecisionOnly() {
+  void positionsAreSentWithFiveDecimalPlaces() {
     feed(28.7234567, 77.0512345, now);
     var bus = decode(cache.get(RegionService.Filter.ANY, "", true).json()).buses().getFirst();
-    // The feed is float32: the rounded value is that float to within 1e-6 degrees (~0.1 m).
-    assertEquals((float) 28.7234567, bus.busLatitude(), 1e-6);
-    assertEquals((float) 77.0512345, bus.busLongitude(), 1e-6);
-    assertEquals(bus.busLatitude(), RegionService.round(bus.busLatitude(), 6));
+    // Five places are ~1.1 m: the value is the feed's position to within half of that.
+    assertEquals((float) 28.7234567, bus.busLatitude(), 5.1e-6);
+    assertEquals((float) 77.0512345, bus.busLongitude(), 5.1e-6);
+    assertEquals(bus.busLatitude(), RegionService.round(bus.busLatitude(), 5));
+    assertEquals(bus.busLongitude(), RegionService.round(bus.busLongitude(), 5));
+  }
+
+  @Test
+  void nullFieldsAreLeftOutOfTheJson() {
+    feed(NW[0], NW[1], now);
+    var bus = json.readTree(cache.get(RegionService.Filter.ANY, "", true).json()).get("buses").get(0);
+    assertEquals("bus300", bus.get("vehicleId").asString());
+    assertFalse(bus.has("distanceFromShapeMeters"), "no shape for this trip: the key is omitted");
+    assertTrue(bus.has("likelyRoutes"), "empty lists are still sent");
+    bus.properties().forEach(p -> assertFalse(p.getValue().isNull(), p.getKey() + " is null"));
+  }
+
+  /** Rebuilds the per-bus objects from the compact columns, the way the web client does. */
+  List<Map<String, Object>> expand(tools.jackson.databind.JsonNode c) {
+    var cols = c.get("cols");
+    long fetchedAt = c.get("fetchedAt").asLong();
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (int i = 0; i < c.get("count").asInt(); i++) {
+      Map<String, Object> b = new TreeMap<>();
+      for (String col : RegionalBusesCache.COLUMNS) {
+        var v = cols.get(col).get(i);
+        if (v.isNull()) continue;
+        switch (col) {
+          case "lat" -> b.put("busLatitude", v.asLong() / 100000.0);
+          case "lng" -> b.put("busLongitude", v.asLong() / 100000.0);
+          case "age" -> b.put("lastUpdatedEpochSeconds", (int) (fetchedAt - v.asLong())); // Integer, as Jackson reads it
+          case "offRouteFlag" -> b.put("offRouteFlag", v.asInt() == 1);
+          case "tripId" -> {
+            String trip = v.asString();
+            if (c.get("tripIdPrefixed").asBoolean() && trip.startsWith("^"))
+              trip = cols.get("routeId").get(i).asString() + trip.substring(1);
+            b.put("tripId", trip);
+          }
+          default -> b.put(col, json.treeToValue(v, Object.class));
+        }
+      }
+      out.add(b);
+    }
+    if ("vehicleId".equals(c.get("order").asString()))
+      out.sort(Comparator.comparing(b -> (String) b.get("vehicleId")));
+    return out;
+  }
+
+  @Test
+  void compactFormCarriesTheSameBusesAndFields() throws Exception {
+    // Three buses fed out of vehicleId order, one on a second route, so the regrouping is exercised.
+    index.routes.put("rE", new TransitIndex.Route("rE", "301", "301UP", "UP", true));
+    index.routesAtStop.get("nw").add("rE");
+    index.computeRegions();
+    var feed = FeedMessage.newBuilder()
+        .setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0").setTimestamp(now));
+    String[][] fleet = {{"busC", "rD", "tD"}, {"busA", "rE", "rE_9"}, {"busB", "rD", "other"}};
+    for (var f : fleet)
+      feed.addEntity(FeedEntity.newBuilder().setId(f[0]).setVehicle(
+          VehiclePosition.newBuilder()
+              .setVehicle(VehicleDescriptor.newBuilder().setId(f[0]))
+              .setTrip(TripDescriptor.newBuilder().setRouteId(f[1]).setTripId(f[2]))
+              .setPosition(Position.newBuilder().setLatitude((float) NW[0]).setLongitude((float) NW[1]))
+              .setTimestamp(now - 7)));
+    snapshot.accept(feed.build(), true, false);
+
+    var e = cache.get(RegionService.Filter.ANY, "", true);
+    var plain = json.readTree(e.json());
+    var compact = json.readTree(new GZIPInputStream(new ByteArrayInputStream(e.compactGzip())).readAllBytes());
+    assertEquals(3, plain.get("buses").size());
+    assertEquals(3, compact.get("count").asInt());
+
+    List<Map<String, Object>> expected = new ArrayList<>();
+    for (var b : plain.get("buses")) expected.add(new TreeMap<>(json.treeToValue(b, Map.class)));
+    assertEquals(expected, expand(compact), "same buses, same fields, same order");
+    for (String field : List.of("warnings", "fetchedAt", "feedAvailable", "region", "eligibleRouteCount",
+        "excludedByRegion", "excludedOutsideArea"))
+      assertEquals(plain.get(field), compact.get(field), field);
+    assertNotEquals(e.etag(), e.compactEtag());
+    assertTrue(e.matches(e.etag()) && e.matches(e.compactEtag()) && e.matches(e.etag().replace("\"", "")));
+    assertFalse(e.matches("") || e.matches(null) || e.matches("\"other\""));
+  }
+
+  @Test
+  void aWaitingClientGetsTheNextDifferentAnswer() throws Exception {
+    feed(NW[0], NW[1], now - 20);
+    awaitWarmUp();
+    var held = cache.get(RegionService.Filter.ANY, "", true);
+    var next = new CompletableFuture<RegionalBusesCache.Encoded>();
+    cache.await(RegionService.Filter.ANY, "", true, held.etag(), next::complete);
+    assertEquals(1, cache.waiting());
+    Thread.sleep(100);
+    assertFalse(next.isDone(), "nothing new yet");
+
+    feed(N[0], N[1], now); // the warm-up build of the new snapshot releases the waiter
+    var got = next.get(5, TimeUnit.SECONDS);
+    assertNotEquals(held.etag(), got.etag());
+    assertEquals(now, decode(got.json()).buses().getFirst().lastUpdatedEpochSeconds());
+    assertEquals(0, cache.waiting());
+  }
+
+  @Test
+  void aClientHoldingAnOldAnswerIsAnsweredAtOnceAndCanWithdraw() throws Exception {
+    feed(NW[0], NW[1], now);
+    awaitWarmUp();
+    var current = cache.get(RegionService.Filter.ANY, "", true);
+    var next = new CompletableFuture<RegionalBusesCache.Encoded>();
+    cache.await(RegionService.Filter.ANY, "", true, "\"stale\"", next::complete);
+    assertSame(current, next.get(1, TimeUnit.SECONDS));
+    assertEquals(0, cache.waiting());
+
+    Runnable withdraw = cache.await(RegionService.Filter.ANY, "", true, current.compactEtag(), x -> fail("withdrawn"));
+    assertEquals(1, cache.waiting());
+    withdraw.run();
+    assertEquals(0, cache.waiting());
+    feed(N[0], N[1], now);
+    awaitWarmUp();
+  }
+
+  @Test
+  void aWaitedRouteViewIsRebuiltWithTheSnapshot() throws Exception {
+    feed(NW[0], NW[1], now - 20);
+    awaitWarmUp();
+    var held = cache.get(RegionService.Filter.ANY, "300", false);
+    var next = new CompletableFuture<RegionalBusesCache.Encoded>();
+    cache.await(RegionService.Filter.ANY, "300", false, held.etag(), next::complete);
+    feed(N[0], N[1], now); // nobody polls the route view: the feed update itself rebuilds it
+    assertEquals(now, decode(next.get(5, TimeUnit.SECONDS).json()).buses().getFirst().lastUpdatedEpochSeconds());
   }
 }

@@ -17,4 +17,14 @@ export default defineConfig({
   define: {
     global: 'globalThis',
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Leaflet changes far less often than the app: its own chunk stays cached across deploys.
+        codeSplitting: {
+          groups: [{ name: 'leaflet', test: /node_modules[\/](leaflet|react-leaflet|@react-leaflet)[\/]/ }],
+        },
+      },
+    },
+  },
 })
