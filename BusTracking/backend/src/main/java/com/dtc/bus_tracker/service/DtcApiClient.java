@@ -59,6 +59,17 @@ public class DtcApiClient {
     static final double MIN_FLEET_SHARE = 0.5;
     /** Below this many vehicles the check is off: a small fleet can legitimately empty out. */
     static final int MIN_FLEET_FOR_CHECK = 100;
+    /** How long incomplete files are skipped quietly before the feed is reported as failing. */
+    static final long INCOMPLETE_GRACE_MS = 60_000;
+    /** When the current run of incomplete files began (millis); 0 when the last file was complete. */
+    private long incompleteSince;
+
+    /** True while incomplete files are still within {@link #INCOMPLETE_GRACE_MS} of the first one. */
+    private boolean skipIncomplete() {
+        long now = System.currentTimeMillis();
+        if (incompleteSince == 0) incompleteSince = now;
+        return now - incompleteSince < INCOMPLETE_GRACE_MS;
+    }
 
     private static class FeedResponseException extends RuntimeException {
         FeedResponseException(String message) { super(message); }
@@ -80,23 +91,30 @@ public class DtcApiClient {
             snapshot.unchanged();
             return List.of();
         }
+        // An empty 200 is the file caught at the start of a rewrite: skipped like a partial file.
+        if (response.statusCode() == 200 && (response.body() == null || response.body().length == 0)
+                && snapshot.vehicles().size() >= MIN_FLEET_FOR_CHECK && skipIncomplete()) {
+            return List.of();
+        }
         if (response.statusCode() != 200 || response.body() == null || response.body().length == 0) {
             throw new FeedResponseException("DTC API returned HTTP " + response.statusCode() + (response.statusCode() == 401 || response.statusCode() == 403 ? "; check DTC_API_KEY authorization." : "; live positions unavailable."));
         }
 
         FeedMessage feed = FeedMessage.parseFrom(response.body());
-        // DTC rewrites the file in place: for a few seconds a new version can be served empty or
-        // with only a header (a valid, vehicle-less feed). Accepting it would wipe every bus off
-        // the map until the next file. Treat it as a failed poll instead: the last positions stay
-        // (each still dropped once its fix is 2 minutes old), the ETag is not kept, and the next
-        // poll fetches the finished file.
+        // DTC rewrites the file in place: a poll often catches it part-written, or with only a
+        // header (a valid, vehicle-less feed). Accepting that would wipe buses off the map until the
+        // next file. Such a file is skipped like an unchanged one: the last positions stay (each
+        // still dropped once its fix is 2 minutes old), the ETag is not kept, and the next poll
+        // fetches the finished file. Only if nothing complete arrives for a minute is it reported.
         int previous = snapshot.vehicles().size();
         int vehicles = 0;
         for (var entity : feed.getEntityList()) if (entity.hasVehicle()) vehicles++;
         if (previous >= MIN_FLEET_FOR_CHECK && vehicles < previous * MIN_FLEET_SHARE) {
-            throw new FeedResponseException("DTC published an incomplete feed file (" + vehicles
+            if (skipIncomplete()) return List.of();
+            throw new FeedResponseException("DTC has been publishing incomplete feed files (" + vehicles
                     + " vehicles, previously " + previous + "); showing the last positions received.");
         }
+        incompleteSince = 0;
         snapshot.accept(feed, true, false);
         feedEtag = response.headers().firstValue("ETag").orElse(null);
         if (!tripUpdatesUrl.isBlank()) {
