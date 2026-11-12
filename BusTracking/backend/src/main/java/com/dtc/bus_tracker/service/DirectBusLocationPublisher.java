@@ -18,4 +18,9 @@ public class DirectBusLocationPublisher implements BusLocationPublisher {
     public void publish(BusLocationEvent event) {
         ingestService.ingest(event);
     }
+
+    @Override
+    public void publishAll(java.util.List<BusLocationEvent> events) {
+        ingestService.ingestAll(events);
+    }
 }

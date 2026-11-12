@@ -17,7 +17,10 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -50,15 +53,31 @@ public class BusLocationIngestService {
     private final SimpMessagingTemplate messagingTemplate;
 
     public void ingest(BusLocationEvent event) {
-        if (event.getSpeedKmh() == null || event.getSpeedKmh() == 0.0) {
-            busLocationStore.findByVehicleId(event.getVehicleId())
-                    .ifPresent(previous -> deriveSpeedFromMovement(previous, event));
-        }
+        ingestAll(List.of(event));
+    }
 
-        busLocationStore.save(event);
-        Bus bus = upsertBus(event);
-        recordHistory(bus, event);
-        messagingTemplate.convertAndSend(BUS_TOPIC, event);
+    /**
+     * One feed poll. The history rows go to the database in a single transaction, and a bus row
+     * is only read or written when something about the bus changed: doing all of that per event
+     * was several database round trips per bus, which on a small hosted instance took longer
+     * than the poll interval and starved every other request.
+     */
+    public void ingestAll(List<BusLocationEvent> events) {
+        List<BusLocation> history = new ArrayList<>(events.size());
+        for (BusLocationEvent event : events) {
+            try {
+                if (event.getSpeedKmh() == null || event.getSpeedKmh() == 0.0) {
+                    busLocationStore.findByVehicleId(event.getVehicleId())
+                            .ifPresent(previous -> deriveSpeedFromMovement(previous, event));
+                }
+                busLocationStore.save(event);
+                history.add(historyRow(upsertBus(event), event));
+                messagingTemplate.convertAndSend(BUS_TOPIC, event);
+            } catch (RuntimeException e) {
+                log.warn("Bus location for {} skipped: {}", event.getVehicleId(), e.getMessage());
+            }
+        }
+        if (!history.isEmpty()) busLocationRepository.saveAll(history);
     }
 
     private void deriveSpeedFromMovement(BusLocationEvent previous, BusLocationEvent current) {
@@ -77,7 +96,21 @@ public class BusLocationIngestService {
         current.setSpeedKmh(speedKmh);
     }
 
+    /** A bus row as last written, with the event fields it was written from. */
+    private record KnownBus(Bus bus, String routeCode, Boolean wheelchair) {}
+
+    /** vehicle id -> bus row. Cleared with the route cache, so a row edited elsewhere is picked up again. */
+    private final Map<String, KnownBus> knownBuses = new ConcurrentHashMap<>();
+
     private Bus upsertBus(BusLocationEvent event) {
+        if (System.currentTimeMillis() - routesCachedAt > ROUTE_CACHE_MS) knownBuses.clear();
+        KnownBus known = knownBuses.get(event.getVehicleId());
+        if (known != null && Objects.equals(known.routeCode(), event.getRouteId())
+                && (event.getWheelchairSpaceAvailable() == null
+                        || event.getWheelchairSpaceAvailable().equals(known.wheelchair()))) {
+            return known.bus();
+        }
+
         Bus bus = busRepository.findByVehicleId(event.getVehicleId())
                 .orElseGet(() -> Bus.builder().vehicleId(event.getVehicleId()).build());
 
@@ -92,7 +125,10 @@ public class BusLocationIngestService {
                 bus.setRoute(route);
             }
         }
-        return busRepository.save(bus);
+        Bus saved = busRepository.save(bus);
+        knownBuses.put(event.getVehicleId(),
+                new KnownBus(saved, event.getRouteId(), saved.getWheelchairAccessible()));
+        return saved;
     }
 
     private static final long ROUTE_CACHE_MS = 300_000;
@@ -108,17 +144,17 @@ public class BusLocationIngestService {
         return routesByCode.computeIfAbsent(code, routeRepository::findByRouteCode).orElse(null);
     }
 
-    private void recordHistory(Bus bus, BusLocationEvent event) {
+    private BusLocation historyRow(Bus bus, BusLocationEvent event) {
         LocalDateTime recordedAt = event.getTimestamp() != null
                 ? LocalDateTime.ofInstant(Instant.ofEpochSecond(event.getTimestamp()), ZoneId.systemDefault())
                 : LocalDateTime.now();
 
-        busLocationRepository.save(BusLocation.builder()
+        return BusLocation.builder()
                 .bus(bus)
                 .latitude(event.getLatitude())
                 .longitude(event.getLongitude())
                 .speed(event.getSpeedKmh())
                 .recordedAt(recordedAt)
-                .build());
+                .build();
     }
 }

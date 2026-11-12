@@ -115,8 +115,8 @@ public class DtcIngestionService {
         }
         publishExecutor.execute(() -> {
             try {
+                publisher.publishAll(events);
                 for (BusLocationEvent event : events) {
-                    publisher.publish(event);
                     if (event.getTimestamp() != null) publishedStamps.put(event.getVehicleId(), event.getTimestamp());
                 }
                 lastPublishedAt = System.currentTimeMillis() / 1000;
