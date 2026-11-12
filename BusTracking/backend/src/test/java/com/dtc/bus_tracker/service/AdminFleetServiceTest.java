@@ -20,7 +20,8 @@ class AdminFleetServiceTest {
 
     private final BusRepository buses = mock(BusRepository.class);
     private final BusLocationStore store = mock(BusLocationStore.class);
-    private final AdminFleetService service = new AdminFleetService(buses, store);
+    private final BusRegistryCache registry = new BusRegistryCache(buses);
+    private final AdminFleetService service = new AdminFleetService(registry, store);
 
     private final Route r534 = Route.builder().routeCode("1052").name("534").build();
     private final Route r990 = Route.builder().routeCode("2001").name("990A").build();
@@ -111,5 +112,21 @@ class AdminFleetServiceTest {
             var ex = assertThrows(ResponseStatusException.class, call::run);
             assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
         }
+    }
+
+    @Test void pagesOfOneListShareOneBuildUntilPositionsChange() {
+        var p0 = service.list(null, null, null, "vehicleId", 0, 2);
+        var p1 = service.list(null, null, null, "vehicleId", 1, 2);
+        var p2 = service.list(null, null, null, "vehicleId", 2, 2);
+        assertEquals(List.of("DL1PC0001", "DL1PC0002", "DL1PC0003", "DL1PC0004", "DL1PC0099"),
+                java.util.stream.Stream.of(p0, p1, p2).flatMap(p -> p.getContent().stream()).map(FleetBusResponse::getVehicleId).toList());
+        verify(store, times(1)).findAll(); // one build served all three pages
+        assertEquals(p0.getStatusCounts(), p2.getStatusCounts());
+
+        // New positions: the next page is built from them, not from the earlier list.
+        when(store.findAll()).thenReturn(List.of(fix("DL1PC0001", "1052", 5, 32.0)));
+        registry.liveChanged();
+        assertEquals(4, service.list(null, null, null, "vehicleId", 0, 50).getTotalElements());
+        verify(store, times(2)).findAll();
     }
 }

@@ -4,7 +4,6 @@ import com.dtc.bus_tracker.dto.BusLocationEvent;
 import com.dtc.bus_tracker.dto.FleetBusResponse;
 import com.dtc.bus_tracker.dto.FleetPageResponse;
 import com.dtc.bus_tracker.entity.Bus;
-import com.dtc.bus_tracker.repository.BusRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -40,7 +39,8 @@ public class AdminFleetService {
             "speed", FleetBusResponse::getSpeedKmh,
             "status", FleetBusResponse::getLiveStatus);
 
-    private final BusRepository busRepository;
+    /** The registry from memory: the console fetches the fleet as several pages in a row. */
+    private final BusRegistryCache registry;
     private final BusLocationStore busLocationStore;
 
     /**
@@ -59,6 +59,48 @@ public class AdminFleetService {
         String needle = blank(q) ? null : q.trim().toLowerCase(Locale.ROOT);
         String routeFilter = blank(route) ? null : route.trim();
 
+        var key = new ListKey(needle, routeFilter, statuses, blank(sort) ? "" : sort.trim(), now, registry.fleetVersion());
+        Filtered filtered = recent.get(key);
+        if (filtered == null) {
+            filtered = filter(needle, routeFilter, statuses, order, now);
+            if (recent.size() > 32) recent.clear();
+            recent.keySet().removeIf(k -> k.now() != now); // only this second's lists are reusable
+            recent.put(key, filtered);
+        }
+        Map<BusLiveStatus, Long> counts = filtered.counts();
+        List<FleetBusResponse> matching = filtered.rows();
+
+        int from = (int) Math.min((long) page * size, matching.size());
+        int to = Math.min(from + size, matching.size());
+        return FleetPageResponse.builder()
+                .content(List.copyOf(matching.subList(from, to)))
+                .page(page)
+                .size(size)
+                .totalElements(matching.size())
+                .totalPages((matching.size() + size - 1) / size)
+                .statusCounts(new EnumMap<>(counts))
+                .generatedAt(now)
+                .build();
+    }
+
+    /** One filter/sort of the fleet; every page of it is a slice of {@code rows}. */
+    private record Filtered(List<FleetBusResponse> rows, Map<BusLiveStatus, Long> counts) {}
+
+    /**
+     * A list request, minus the page. {@code now} is in seconds, as is every live status in it;
+     * {@code fleetVersion} changes with any new position or bus row, so a reused list is exact.
+     */
+    private record ListKey(String needle, String route, Set<BusLiveStatus> statuses, String sort, long now, long fleetVersion) {}
+
+    /**
+     * Lists built in the current second. The console asks for every page of the fleet at once;
+     * each page used to rebuild and sort all of it. A list is reused only for the same second and
+     * the same registry and positions, so it is the one a fresh build would give.
+     */
+    private final Map<ListKey, Filtered> recent = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private Filtered filter(String needle, String routeFilter, Set<BusLiveStatus> statuses,
+                            Comparator<FleetBusResponse> order, long now) {
         Map<BusLiveStatus, Long> counts = new EnumMap<>(BusLiveStatus.class);
         for (BusLiveStatus s : BusLiveStatus.values()) counts.put(s, 0L);
         List<FleetBusResponse> matching = new ArrayList<>();
@@ -70,18 +112,7 @@ public class AdminFleetService {
             if (statuses.contains(row.getLiveStatus())) matching.add(row);
         }
         matching.sort(order);
-
-        int from = (int) Math.min((long) page * size, matching.size());
-        int to = Math.min(from + size, matching.size());
-        return FleetPageResponse.builder()
-                .content(List.copyOf(matching.subList(from, to)))
-                .page(page)
-                .size(size)
-                .totalElements(matching.size())
-                .totalPages((matching.size() + size - 1) / size)
-                .statusCounts(counts)
-                .generatedAt(now)
-                .build();
+        return new Filtered(List.copyOf(matching), java.util.Collections.unmodifiableMap(counts));
     }
 
     /** Every registered bus, plus any vehicle in the live store whose registry row is missing. */
@@ -91,7 +122,7 @@ public class AdminFleetService {
             if (e.getVehicleId() != null) latest.put(e.getVehicleId(), e);
         }
         List<FleetBusResponse> rows = new ArrayList<>();
-        for (Bus bus : busRepository.findAllWithRoute()) {
+        for (Bus bus : registry.all()) {
             rows.add(row(bus, latest.remove(bus.getVehicleId()), now));
         }
         for (BusLocationEvent orphan : latest.values()) {

@@ -145,6 +145,21 @@ public class LiveTransitService {
    * Returns null when no shape is available for this trip.
    */
   private Double distanceFromShape(RealtimeSnapshot.Vehicle v) {
+    // Static shapes: the same fix always gives the same distance, and about half the fleet has not
+    // reported again since the previous answer.
+    var known = shapeDistances.get(v.id());
+    if (known != null && known.vehicle().equals(v)) return known.meters();
+    Double meters = computeDistanceFromShape(v);
+    if (shapeDistances.size() > 20_000) shapeDistances.clear();
+    shapeDistances.put(v.id(), new ShapeDistance(v, meters));
+    return meters;
+  }
+
+  private record ShapeDistance(RealtimeSnapshot.Vehicle vehicle, Double meters) {}
+
+  private final Map<String, ShapeDistance> shapeDistances = new java.util.concurrent.ConcurrentHashMap<>();
+
+  private Double computeDistanceFromShape(RealtimeSnapshot.Vehicle v) {
     var trip = index.trips.get(v.tripId());
     if (trip == null) return null;
     var shape = index.shapes.get(trip.shapeId());

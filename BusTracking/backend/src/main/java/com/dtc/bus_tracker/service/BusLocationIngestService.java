@@ -51,6 +51,7 @@ public class BusLocationIngestService {
     private final RouteRepository routeRepository;
     private final BusLocationRepository busLocationRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final BusRegistryCache registry;
 
     public void ingest(BusLocationEvent event) {
         ingestAll(List.of(event));
@@ -63,7 +64,9 @@ public class BusLocationIngestService {
      * than the poll interval and starved every other request.
      */
     public void ingestAll(List<BusLocationEvent> events) {
-        List<BusLocation> history = new ArrayList<>(events.size());
+        // Live store and WebSocket first, so the admin map is not kept waiting by the database
+        // writes below (bus rows and history), which nothing on the live path depends on.
+        List<BusLocationEvent> stored = new ArrayList<>(events.size());
         for (BusLocationEvent event : events) {
             try {
                 if (event.getSpeedKmh() == null || event.getSpeedKmh() == 0.0) {
@@ -71,10 +74,19 @@ public class BusLocationIngestService {
                             .ifPresent(previous -> deriveSpeedFromMovement(previous, event));
                 }
                 busLocationStore.save(event);
-                history.add(historyRow(upsertBus(event), event));
                 messagingTemplate.convertAndSend(BUS_TOPIC, event);
+                stored.add(event);
             } catch (RuntimeException e) {
                 log.warn("Bus location for {} skipped: {}", event.getVehicleId(), e.getMessage());
+            }
+        }
+        if (!stored.isEmpty()) registry.liveChanged();
+        List<BusLocation> history = new ArrayList<>(stored.size());
+        for (BusLocationEvent event : stored) {
+            try {
+                history.add(historyRow(upsertBus(event), event));
+            } catch (RuntimeException e) {
+                log.warn("Bus row for {} not written: {}", event.getVehicleId(), e.getMessage());
             }
         }
         if (!history.isEmpty()) busLocationRepository.saveAll(history);
@@ -126,6 +138,7 @@ public class BusLocationIngestService {
             }
         }
         Bus saved = busRepository.save(bus);
+        registry.invalidate();
         knownBuses.put(event.getVehicleId(),
                 new KnownBus(saved, event.getRouteId(), saved.getWheelchairAccessible()));
         return saved;

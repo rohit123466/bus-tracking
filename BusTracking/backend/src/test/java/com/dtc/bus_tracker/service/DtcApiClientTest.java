@@ -106,4 +106,40 @@ class DtcApiClientTest {
         assertTrue(snapshot.feedError.contains("no fresh vehicle positions"));
         assertTrue(snapshot.generation() > generation, "cached answers must see the new feed state");
     }
+    FeedMessage.Builder fleet(int n, long stamp) {
+        var feed = FeedMessage.newBuilder().setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0"));
+        for (int i = 0; i < n; i++) feed.addEntity(vehicle("e" + i, "bus" + i, stamp, 28.6f));
+        return feed;
+    }
+    @Test void anUnfinishedFeedFileDoesNotWipeTheFleet() throws Exception {
+        long now = Instant.now().getEpochSecond();
+        etag = "\"full\"";
+        body = fleet(500, now).build().toByteArray();
+        assertEquals(500, client.fetchVehiclePositions().size());
+
+        // DTC is rewriting the file: a header-only feed, then one cut off part-way, under new ETags.
+        etag = "\"partial\"";
+        body = fleet(0, now).build().toByteArray();
+        assertThrows(IllegalStateException.class, client::fetchVehiclePositions);
+        etag = "\"partial2\"";
+        body = fleet(160, now).build().toByteArray();
+        assertThrows(IllegalStateException.class, client::fetchVehiclePositions);
+        assertEquals(500, snapshot.vehicles().size(), "last positions kept");
+        assertTrue(snapshot.feedError.contains("incomplete"));
+
+        // The finished file is fetched on the next poll (the partial ETag was not kept).
+        etag = "\"next\"";
+        body = fleet(480, now + 10).build().toByteArray();
+        assertEquals(480, client.fetchVehiclePositions().size());
+        assertEquals("\"full\"", ifNoneMatch.getLast(), "asked relative to the last complete file");
+        assertNull(snapshot.feedError);
+    }
+    @Test void aSmallFleetMayShrinkOrEmpty() throws Exception {
+        long now = Instant.now().getEpochSecond();
+        body = fleet(40, now).build().toByteArray();
+        client.fetchVehiclePositions();
+        body = fleet(0, now).build().toByteArray();
+        client.fetchVehiclePositions();
+        assertEquals(0, snapshot.vehicles().size());
+    }
 }

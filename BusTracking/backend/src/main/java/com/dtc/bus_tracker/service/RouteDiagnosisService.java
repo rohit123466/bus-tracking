@@ -139,6 +139,8 @@ public class RouteDiagnosisService {
             List<Terminal> terminals) {}
 
     private final BusRepository busRepository;
+    /** Registry from memory (shared with the fleet list); the scan runs every 30 s per open console. */
+    private final BusRegistryCache registry;
     private final BusLocationStore busLocationStore;
     private final RouteRepository routeRepository;
     private final TripRepository tripRepository;
@@ -147,12 +149,13 @@ public class RouteDiagnosisService {
     private final RealtimeSnapshot snapshot;
     private final boolean tripUpdatesConfigured;
 
-    public RouteDiagnosisService(BusRepository busRepository, BusLocationStore busLocationStore,
+    public RouteDiagnosisService(BusRepository busRepository, BusRegistryCache registry, BusLocationStore busLocationStore,
                                  RouteRepository routeRepository, TripRepository tripRepository,
                                  StopTimeRepository stopTimeRepository, FeedHealthService feedHealthService,
                                  RealtimeSnapshot snapshot,
                                  @Value("${dtc.trip-updates.url:}") String tripUpdatesUrl) {
         this.busRepository = busRepository;
+        this.registry = registry;
         this.busLocationStore = busLocationStore;
         this.routeRepository = routeRepository;
         this.tripRepository = tripRepository;
@@ -395,7 +398,7 @@ public class RouteDiagnosisService {
             if (e.getVehicleId() != null) latest.put(e.getVehicleId(), e);
         }
         Map<String, List<Member>> byRoute = new LinkedHashMap<>();
-        for (Bus bus : busRepository.findAllWithRoute()) {
+        for (Bus bus : registry.all()) {
             add(byRoute, new Member(bus, latest.remove(bus.getVehicleId())));
         }
         for (BusLocationEvent orphan : latest.values()) add(byRoute, new Member(null, orphan));

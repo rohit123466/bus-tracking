@@ -51,6 +51,15 @@ public class DtcApiClient {
         }
     }
 
+    /**
+     * A feed with fewer than this share of the previous feed's vehicles is taken as unfinished: the
+     * real fleet changes by a few percent between files ~11 s apart, while files caught mid-write
+     * held anything from none to about a third of the vehicles.
+     */
+    static final double MIN_FLEET_SHARE = 0.5;
+    /** Below this many vehicles the check is off: a small fleet can legitimately empty out. */
+    static final int MIN_FLEET_FOR_CHECK = 100;
+
     private static class FeedResponseException extends RuntimeException {
         FeedResponseException(String message) { super(message); }
     }
@@ -76,6 +85,18 @@ public class DtcApiClient {
         }
 
         FeedMessage feed = FeedMessage.parseFrom(response.body());
+        // DTC rewrites the file in place: for a few seconds a new version can be served empty or
+        // with only a header (a valid, vehicle-less feed). Accepting it would wipe every bus off
+        // the map until the next file. Treat it as a failed poll instead: the last positions stay
+        // (each still dropped once its fix is 2 minutes old), the ETag is not kept, and the next
+        // poll fetches the finished file.
+        int previous = snapshot.vehicles().size();
+        int vehicles = 0;
+        for (var entity : feed.getEntityList()) if (entity.hasVehicle()) vehicles++;
+        if (previous >= MIN_FLEET_FOR_CHECK && vehicles < previous * MIN_FLEET_SHARE) {
+            throw new FeedResponseException("DTC published an incomplete feed file (" + vehicles
+                    + " vehicles, previously " + previous + "); showing the last positions received.");
+        }
         snapshot.accept(feed, true, false);
         feedEtag = response.headers().firstValue("ETag").orElse(null);
         if (!tripUpdatesUrl.isBlank()) {
