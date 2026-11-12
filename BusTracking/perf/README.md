@@ -70,3 +70,31 @@ loads the CPU, so part of that gap is warm-up. With both builds running at once 
 saturated and the tails of both were hundreds of ms (p99 400 vs 560–850 ms), i.e. not a usable
 comparison. Server latency was already single-digit ms at p50 before this change; the gains here
 are bytes on the wire, time to the screen and map script time.
+
+### Follow-up, 12 Nov 2026 evening: feed pickup and admin console
+
+Each build measured alone on port 8081 after a 4-minute warm-up, 4 minutes each. "Pickup" is
+from the new OTD file's Last-Modified time to our `/buses/regional` answer changing; about 1-1.5 s
+of it is DTC's own delay before the file can be downloaded.
+
+| | Before (4 s poll) | After (2 s poll) |
+|---|---|---|
+| Pickup: mean / p50 / p90 | 3.26 / 3.15 / 4.92 s | 2.72 / 2.28 / 3.33 s |
+| Lowest bus count seen (live) | 1,232 | 1,256 (and 1,218 in a separate 160-sample run with 0 feed errors) |
+| OTD 503s | 0 | 0 |
+| Admin: whole fleet as the console loads it | 373 ms (pages one by one) | 114 ms (pages in parallel) |
+| Admin: one fleet page (500 rows) p50 | 48 ms | 28 ms |
+| Admin: not-responding routes p50 | 55 ms | 33 ms |
+| Admin: KPI stats p50 | 25 ms | 25 ms |
+
+Findings that shaped the change:
+- OTD answers **HTTP 503 above about 1.5 requests/s per key**: two pollers at 1 s got 23% 503s, at
+  2 s none. So 2 s, not 1 s (a local and a hosted instance often share one key). Measurement
+  scripts that probe OTD use the same budget — keep them at one request per 3 s or slower.
+- OTD does not gzip the file (592 KB either way).
+- DTC rewrites the file in place. Polls catch it as 0 bytes, header-only (a valid feed with no
+  vehicles, which used to empty the map until the next file) or part-written — 34 times in 8
+  minutes at 2 s. Such files are now skipped like an unchanged feed and reported only if nothing
+  complete arrives for a minute.
+- 85-95% of vehicles carry a new fix in each OTD file, so reusing per-bus results saves only
+  10-25% of an answer build (`Server-Timing: reused;desc=...`); build time stays ~130 ms.

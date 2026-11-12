@@ -118,14 +118,27 @@ class DtcApiClientTest {
         assertEquals(500, client.fetchVehiclePositions().size());
 
         // DTC is rewriting the file: a header-only feed, then one cut off part-way, under new ETags.
+        // Skipped quietly, like an unchanged feed: nothing published, no feed error shown.
+        long generation = snapshot.generation();
         etag = "\"partial\"";
         body = fleet(0, now).build().toByteArray();
-        assertThrows(IllegalStateException.class, client::fetchVehiclePositions);
+        assertTrue(client.fetchVehiclePositions().isEmpty());
         etag = "\"partial2\"";
         body = fleet(160, now).build().toByteArray();
-        assertThrows(IllegalStateException.class, client::fetchVehiclePositions);
+        assertTrue(client.fetchVehiclePositions().isEmpty());
+        etag = "\"empty\"";
+        body = new byte[0];
+        assertTrue(client.fetchVehiclePositions().isEmpty());
         assertEquals(500, snapshot.vehicles().size(), "last positions kept");
+        assertEquals(generation, snapshot.generation());
+        assertNull(snapshot.feedError);
+
+        // Still incomplete after the grace period: now it is reported.
+        body = fleet(160, now).build().toByteArray();
+        ReflectionTestUtils.setField(client, "incompleteSince", System.currentTimeMillis() - 61_000);
+        assertThrows(IllegalStateException.class, client::fetchVehiclePositions);
         assertTrue(snapshot.feedError.contains("incomplete"));
+        assertEquals(500, snapshot.vehicles().size());
 
         // The finished file is fetched on the next poll (the partial ETag was not kept).
         etag = "\"next\"";
