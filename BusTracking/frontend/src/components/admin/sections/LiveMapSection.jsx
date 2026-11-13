@@ -46,7 +46,6 @@ function BusDrawer({ id, bus, routeName, onClose }) {
   const headingRef = useRef(null);
   useEffect(() => { headingRef.current?.focus(); }, [id]);
   const status = bus ? liveStatus(bus, now) : 'NO_DATA';
-  const routeQuery = routeName || bus?.routeId;
   return (
     <aside className="admin-drawer" aria-labelledby="drawer-title"
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
@@ -77,8 +76,8 @@ function BusDrawer({ id, bus, routeName, onClose }) {
           </dl>
           <div className="row wrap">
             <Link className="btn btn-sm" to={`/replay?vehicle=${encodeURIComponent(id)}`}><Icon name="clock" size={16} />Journey replay</Link>
-            {routeQuery && (
-              <Link className="btn btn-sm" to={`/route?q=${encodeURIComponent(routeQuery)}`}><Icon name="route" size={16} />Route details</Link>
+            {routeName && (
+              <Link className="btn btn-sm" to={`/?route=${encodeURIComponent(routeName)}`}><Icon name="route" size={16} />Route on live map</Link>
             )}
           </div>
         </div>
