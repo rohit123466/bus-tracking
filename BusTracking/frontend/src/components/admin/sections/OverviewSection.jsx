@@ -180,7 +180,6 @@ export default function OverviewSection() {
               <ul className="list-reset stack admin-links">
                 <li><Link to="/conductor">Conductor console</Link> <span className="muted small">— ticket sales, seat map, camera checks (demo data)</span></li>
                 <li><Link to="/replay">Journey replay</Link> <span className="muted small">— recorded positions of one vehicle</span></li>
-                <li><Link to="/route">Route details (classic)</Link></li>
               </ul>
             </section>
           </div>

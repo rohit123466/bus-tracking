@@ -22,8 +22,6 @@ const MORE = [
     items: [
       { to: '/search', label: 'Find a bus by vehicle number', hint: 'Live position of one vehicle, e.g. DL1PC1234' },
       { to: '/replay', label: 'Journey replay', hint: 'Recorded positions of one vehicle' },
-      { to: '/passing', label: 'Buses passing near me', hint: 'Older nearby view' },
-      { to: '/route', label: 'Route details (classic)', hint: 'Older route view' },
       { to: '/accessibility', label: 'Wheelchair space reports', hint: 'Shown only where a bus reports it; most buses do not' },
     ],
   },

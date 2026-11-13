@@ -10,8 +10,6 @@ const StandsPage = lazy(() => import('./pages/StandsPage'));
 const JourneyPage = lazy(() => import('./pages/JourneyPage'));
 const SavedPage = lazy(() => import('./pages/SavedPage'));
 const BusSearchPage = lazy(() => import('./pages/BusSearchPage'));
-const RouteDetailPage = lazy(() => import('./pages/RouteDetailPage'));
-const PassingNearMePage = lazy(() => import('./pages/PassingNearMePage'));
 const ReplayPage = lazy(() => import('./pages/ReplayPage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
 const AccessibilityPage = lazy(() => import('./pages/AccessibilityPage'));
@@ -43,8 +41,6 @@ function Shell() {
             <Route path="/saved" element={<SavedPage />} />
             <Route path="/accessibility" element={<Classic><AccessibilityPage /></Classic>} />
             <Route path="/search" element={<Classic><BusSearchPage /></Classic>} />
-            <Route path="/route" element={<Classic><RouteDetailPage /></Classic>} />
-            <Route path="/passing" element={<Classic><PassingNearMePage /></Classic>} />
             <Route path="/replay" element={<Classic><ReplayPage /></Classic>} />
             <Route path="/seats" element={<Classic><SeatAvailabilityPage /></Classic>} />
             <Route path="/conductor" element={<Classic><ConductorPage /></Classic>} />

@@ -49,25 +49,10 @@ export const getNearbyBuses = (lat, lng, radiusMeters = 5000, limit = 30) =>
 export const getBusByVehicleId = (vehicleId) =>
   client.get(`/buses/${encodeURIComponent(vehicleId)}`).then((res) => res.data);
 
-export const getBusesPassingNear = (lat, lng, radiusMeters = 1000, limit = 20) =>
-  client
-    .get('/buses/passing-near', { params: { lat, lng, radiusMeters, limit } })
-    .then((res) => res.data);
-
 export const getBusHistory = (vehicleId) =>
   client.get(`/buses/${encodeURIComponent(vehicleId)}/history`).then((res) => res.data);
 
 export const getRoutes = () => client.get('/routes').then((res) => res.data);
-
-export const searchRoutes = (query, limit = 8) =>
-  client
-    .get('/routes/search', { params: { query, limit } })
-    .then((res) => res.data);
-
-export const getRouteDetail = (routeId, vehicleId) =>
-  client
-    .get(`/routes/${routeId}/detail`, { params: vehicleId ? { vehicleId } : {} })
-    .then((res) => res.data);
 
 // Stops are paginated on the backend; pull a large page once so routes/stop
 // clicks can be resolved to lat/lng entirely on the client.
